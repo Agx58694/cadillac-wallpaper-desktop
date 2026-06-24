@@ -172,7 +172,11 @@ function Set-PythonCommand {
   }
 
   $knownPython = @(
+    "$env:LocalAppData\Programs\Python\Python314\python.exe",
+    "$env:LocalAppData\Programs\Python\Python313\python.exe",
     "$env:LocalAppData\Programs\Python\Python312\python.exe",
+    "$env:ProgramFiles\Python314\python.exe",
+    "$env:ProgramFiles\Python313\python.exe",
     "$env:ProgramFiles\Python312\python.exe"
   )
   foreach ($candidate in $knownPython) {
