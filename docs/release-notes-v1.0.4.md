@@ -1,4 +1,4 @@
-# Cadillac Wallpaper Desktop v1.0.3
+# Cadillac Wallpaper Desktop v1.0.4
 
 此版本开始在 GitHub Actions 同时发布 macOS 和 Windows 桌面包。
 
@@ -28,4 +28,4 @@ BFA3A0F4596C4C57A6BCDC1EB3348932 / cadi_wallpaper05111930
 
 完整中文使用说明见：
 
-https://github.com/Agx58694/cadillac-wallpaper-desktop/blob/v1.0.3/docs/usage-zh-CN.md
+https://github.com/Agx58694/cadillac-wallpaper-desktop/blob/v1.0.4/docs/usage-zh-CN.md

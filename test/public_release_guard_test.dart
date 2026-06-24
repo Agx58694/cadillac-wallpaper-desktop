@@ -45,7 +45,7 @@ void main() {
       'docs/usage-zh-CN.md',
       'docs/release-notes-v1.0.0.md',
       'docs/release-notes-v1.0.1.md',
-      'docs/release-notes-v1.0.3.md',
+      'docs/release-notes-v1.0.4.md',
       'WINDOWS_BUILD_README.txt',
     ];
     final localPathPattern = RegExp(
