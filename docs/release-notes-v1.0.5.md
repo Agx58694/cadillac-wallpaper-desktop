@@ -1,4 +1,4 @@
-# Cadillac Wallpaper Desktop v1.0.4
+# Cadillac Wallpaper Desktop v1.0.5
 
 此版本开始在 GitHub Actions 同时发布 macOS 和 Windows 桌面包。
 
@@ -12,6 +12,7 @@
 - GitHub release workflow 增加 Windows x64 构建产物。
 - Windows x64 release 包内置独立 `cadillac_wallpaper_packager.exe`，正常使用不再依赖用户本机 Python/Pillow。
 - Windows x64 release 校验会确认主程序、独立打包 Runtime、`astcenc.exe` 和足球模板 zip 都已进入产物。
+- Windows release 脚本兼容 Flutter 当前的 `build\windows\x64\runner\Release` 输出目录。
 - macOS release 继续使用 Universal `.app`，同时支持 `x86_64` 和 `arm64`。
 
 ## 当前限制
@@ -28,4 +29,4 @@ BFA3A0F4596C4C57A6BCDC1EB3348932 / cadi_wallpaper05111930
 
 完整中文使用说明见：
 
-https://github.com/Agx58694/cadillac-wallpaper-desktop/blob/v1.0.4/docs/usage-zh-CN.md
+https://github.com/Agx58694/cadillac-wallpaper-desktop/blob/v1.0.5/docs/usage-zh-CN.md

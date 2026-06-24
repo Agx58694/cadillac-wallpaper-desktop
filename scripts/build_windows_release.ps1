@@ -97,6 +97,20 @@ function Build-PackagerExecutable([string]$ReleaseDir) {
   }
 }
 
+function Resolve-WindowsReleaseDir {
+  $candidates = @(
+    (Join-Path $projectRoot "build\windows\x64\runner\Release"),
+    (Join-Path $projectRoot "build\windows\runner\Release")
+  )
+  foreach ($candidate in $candidates) {
+    $candidateExe = Join-Path $candidate "cadillac_wallpaper_desktop.exe"
+    if (Test-Path $candidateExe) {
+      return $candidate
+    }
+  }
+  return $candidates[0]
+}
+
 flutter pub get
 flutter analyze
 if (!$SkipTests) {
@@ -104,7 +118,7 @@ if (!$SkipTests) {
 }
 flutter build windows --release
 
-$releaseDir = Join-Path $projectRoot "build\windows\runner\Release"
+$releaseDir = Resolve-WindowsReleaseDir
 $exePath = Join-Path $releaseDir "cadillac_wallpaper_desktop.exe"
 $astcencPath = Join-Path $releaseDir "data\flutter_assets\packager\tools\windows\astcenc.exe"
 

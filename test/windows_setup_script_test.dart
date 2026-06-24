@@ -25,6 +25,14 @@ void main() {
         setupScript, contains('pip", "install", "--upgrade", "pip", "Pillow"'));
     expect(setupScript, contains('build_windows_release.ps1'));
     expect(releaseScript, contains(r'$SkipTests'));
+    expect(
+      releaseScript,
+      contains(r'build\windows\x64\runner\Release'),
+    );
+    expect(
+      releaseScript,
+      contains(r'build\windows\runner\Release'),
+    );
     expect(oneClickScript, contains('setup_and_build_windows.ps1'));
     expect(oneClickScript, contains('-ExecutionPolicy Bypass'));
   });
