@@ -10,7 +10,7 @@ Cadillac Wallpaper Desktop 是一个桌面打包工具，用两张 `2198x367` PN
 | --- | --- |
 | macOS Apple Silicon / M 系列 | `CadillacPackager-macos-universal.zip` |
 | macOS Intel | `CadillacPackager-macos-universal.zip` |
-| Windows x64 | 后续补发 |
+| Windows x64 | `CadillacPackager-windows-x64.zip` |
 
 解压后直接运行应用。macOS 如果提示来自未认证开发者，可以右键应用选择“打开”；如果仍被阻止，可在终端执行：
 
@@ -24,20 +24,20 @@ xattr -dr com.apple.quarantine "/path/to/Cadillac Packager.app"
 
 - 白天主图：PNG，尺寸必须是 `2198x367`。
 - 黑夜主图：PNG，尺寸必须是 `2198x367`。
-- Python 3。
-- Pillow：Python 图片处理库。
+- macOS 版本需要 Python 3 和 Pillow。
+- Windows x64 release 已内置独立打包 Runtime，通常不需要额外安装 Python/Pillow。
 
 应用已经内置当前支持的足球模板，正常下载 release 后不需要额外配置模板 zip。
 
 > 当前版本只适配足球模板这一款。其他官方主题模板结构不同，后续版本再逐步适配。
 
-安装 Pillow：
+macOS 安装 Pillow：
 
 ```bash
 python3 -m pip install Pillow
 ```
 
-Windows 也可以使用：
+如果使用 Windows 源码构建包，或者手动指定外部 Python 脚本，Windows 也可以使用：
 
 ```powershell
 py -m pip install Pillow

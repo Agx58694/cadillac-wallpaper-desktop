@@ -70,3 +70,61 @@ jobs:
         with:
           name: CadillacPackager-macos-universal
           path: CadillacPackager-macos-universal.zip
+
+  windows-release:
+    name: Windows x64 release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.22.3'
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Build Windows release package
+        shell: pwsh
+        run: ./scripts/build_windows_release.ps1 -OutputDir dist
+
+      - name: Verify Windows package
+        shell: pwsh
+        run: |
+          $zipPath = "dist/CadillacPackager-windows-x64.zip"
+          if (!(Test-Path $zipPath)) {
+            throw "Missing Windows release zip: $zipPath"
+          }
+
+          $extractDir = Join-Path $env:RUNNER_TEMP "cadillac-windows-release"
+          if (Test-Path $extractDir) {
+            Remove-Item -Recurse -Force $extractDir
+          }
+          Expand-Archive -Path $zipPath -DestinationPath $extractDir
+
+          $required = @(
+            "cadillac_wallpaper_desktop.exe",
+            "packager_runtime/cadillac_wallpaper_packager.exe",
+            "data/flutter_assets/packager/tools/windows/astcenc.exe",
+            "data/flutter_assets/packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip"
+          )
+
+          foreach ($relative in $required) {
+            $path = Join-Path $extractDir ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
+            if (!(Test-Path $path)) {
+              throw "Missing required file in Windows release zip: $relative"
+            }
+          }
+
+          Get-FileHash $zipPath -Algorithm SHA256
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CadillacPackager-windows-x64
+          path: dist/CadillacPackager-windows-x64.zip
