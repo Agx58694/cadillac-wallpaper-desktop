@@ -89,6 +89,79 @@ void main() {
     );
   });
 
+  test('checks Pillow before launching the Python packager', () async {
+    final tempDir = await Directory.systemTemp.createTemp('packager_pillow_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    var launched = false;
+
+    final service = WallpaperPackagerService(
+      pythonExecutable: 'python-without-pillow',
+      packagerScript: p.join(tempDir.path, 'cadillac_wallpaper_packager.py'),
+      validatePythonDependencies: true,
+      pythonDependencyChecker: (_) => false,
+      processRunner: (command, arguments, workingDirectory, {onOutput}) async {
+        launched = true;
+        return ProcessResult(9, 0, '', '');
+      },
+    );
+
+    expect(
+      () => service.buildPackage(
+        PackageBuildRequest(
+          lightImagePath: '/images/light.png',
+          darkImagePath: '/images/dark.png',
+          outputZipPath: p.join(tempDir.path, 'wallpaper.zip'),
+          workDirPath: p.join(tempDir.path, 'work'),
+          reportPath: p.join(tempDir.path, 'package-report.json'),
+        ),
+      ),
+      throwsA(
+        isA<PackagerException>().having(
+          (error) => error.toString(),
+          'message',
+          contains('Pillow'),
+        ),
+      ),
+    );
+    expect(launched, isFalse);
+  });
+
+  test('uses a standalone packager executable without checking Python',
+      () async {
+    final calls = <ProcessCall>[];
+    final tempDir = await Directory.systemTemp.createTemp('packager_exe_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final report = File(p.join(tempDir.path, 'package-report.json'));
+    await report.writeAsString('{"zip_test_bad_file":null}');
+
+    final service = WallpaperPackagerService(
+      pythonExecutable: 'python-without-pillow',
+      packagerExecutable:
+          p.join(tempDir.path, 'cadillac_wallpaper_packager.exe'),
+      validatePythonDependencies: true,
+      pythonDependencyChecker: (_) => false,
+      processRunner: (command, arguments, workingDirectory, {onOutput}) async {
+        calls.add(ProcessCall(command, arguments, workingDirectory));
+        return ProcessResult(10, 0, '', '');
+      },
+    );
+
+    await service.buildPackage(
+      PackageBuildRequest(
+        lightImagePath: '/images/light.png',
+        darkImagePath: '/images/dark.png',
+        outputZipPath: p.join(tempDir.path, 'wallpaper.zip'),
+        workDirPath: p.join(tempDir.path, 'work'),
+        reportPath: report.path,
+      ),
+    );
+
+    expect(calls, hasLength(1));
+    expect(calls.single.command, contains('cadillac_wallpaper_packager.exe'));
+    expect(calls.single.arguments,
+        isNot(contains('cadillac_wallpaper_packager.py')));
+  });
+
   test('redacts sensitive paths from packager failures', () async {
     final tempDir = await Directory.systemTemp.createTemp('packager_redact_');
     addTearDown(() => tempDir.delete(recursive: true));
@@ -156,17 +229,52 @@ void main() {
     final tempDir = await Directory.systemTemp.createTemp('packager_stream_');
     addTearDown(() => tempDir.delete(recursive: true));
 
+    final script = File(
+      p.join(tempDir.path,
+          Platform.isWindows ? 'fake_packager.bat' : 'fake_packager.sh'),
+    );
+    if (Platform.isWindows) {
+      await script.writeAsString(r'''
+@echo off
+echo [cadillac-packager] step 1/2 fake start
+:next_arg
+if "%~1"=="" goto write_report
+if "%~1"=="--report" (
+  set "report=%~2"
+  shift
+  shift
+  goto next_arg
+)
+shift
+goto next_arg
+:write_report
+> "%report%" echo {"zip_test_bad_file":null}
+echo [cadillac-packager] step 2/2 fake done
+''');
+    } else {
+      await script.writeAsString('''
+#!/bin/sh
+echo "[cadillac-packager] step 1/2 fake start"
+sleep 0.05
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --report)
+      report="\$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+printf '{"zip_test_bad_file":null}' > "\$report"
+echo "[cadillac-packager] step 2/2 fake done"
+''');
+      await Process.run('chmod', <String>['755', script.path]);
+    }
+
     final service = WallpaperPackagerService(
-      pythonExecutable: 'python3',
-      packagerScript: p.join(tempDir.path, 'cadillac_wallpaper_packager.py'),
-      processRunner: (command, arguments, workingDirectory, {onOutput}) async {
-        onOutput?.call('[cadillac-packager] step 1/2 fake start');
-        final reportIndex = arguments.indexOf('--report');
-        final reportPath = arguments[reportIndex + 1];
-        await File(reportPath).writeAsString('{"zip_test_bad_file":null}');
-        onOutput?.call('[cadillac-packager] step 2/2 fake done');
-        return ProcessResult(42, 0, '', '');
-      },
+      packagerExecutable: script.path,
     );
     final streamed = <String>[];
 

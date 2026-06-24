@@ -16,6 +16,8 @@ typedef ProcessRunner = Future<ProcessResult> Function(
   CliOutputSink? onOutput,
 });
 
+typedef PythonDependencyChecker = bool Function(String executable);
+
 class PackagerException implements Exception {
   const PackagerException(this.message);
 
@@ -31,16 +33,34 @@ class WallpaperPackagerService {
     String? packagerScript,
     String? packagerExecutable,
     ProcessRunner? processRunner,
-  })  : pythonExecutable = pythonExecutable ?? _defaultPythonExecutable(),
+    bool? validatePythonDependencies,
+    PythonDependencyChecker? pythonDependencyChecker,
+  })  : pythonExecutable = pythonExecutable ??
+            ((packagerExecutable ?? _defaultPackagerExecutable())?.isNotEmpty ==
+                    true
+                ? _fallbackPythonExecutable()
+                : _defaultPythonExecutable()),
         packagerScript = packagerScript ?? defaultPackagerScript(),
-        packagerExecutable =
-            packagerExecutable ?? Platform.environment['CADILLAC_PACKAGER_CLI'],
-        _processRunner = processRunner ?? _runProcess;
+        packagerExecutable = packagerExecutable ?? _defaultPackagerExecutable(),
+        _processRunner = processRunner ?? _runProcess,
+        _validatePythonDependencies =
+            validatePythonDependencies ?? processRunner == null,
+        _pythonDependencyChecker =
+            pythonDependencyChecker ?? _pythonCanImportPillow;
 
   final String pythonExecutable;
   final String packagerScript;
   final String? packagerExecutable;
   final ProcessRunner _processRunner;
+  final bool _validatePythonDependencies;
+  final PythonDependencyChecker _pythonDependencyChecker;
+
+  String get runtimeDescription {
+    if (packagerExecutable?.isNotEmpty == true) {
+      return packagerExecutable!;
+    }
+    return '$pythonExecutable $packagerScript';
+  }
 
   static String defaultPackagerScript() {
     final envPath = Platform.environment['CADILLAC_PACKAGER_SCRIPT'];
@@ -86,13 +106,19 @@ class WallpaperPackagerService {
     PackageBuildRequest request, {
     CliOutputSink? onCliOutput,
   }) async {
-    final command = packagerExecutable?.isNotEmpty == true
-        ? packagerExecutable!
-        : pythonExecutable;
-    final arguments = packagerExecutable?.isNotEmpty == true
+    final usesPackagerExecutable = packagerExecutable?.isNotEmpty == true;
+    if (!usesPackagerExecutable &&
+        _validatePythonDependencies &&
+        !_pythonDependencyChecker(pythonExecutable)) {
+      throw PackagerException(_missingPillowMessage(pythonExecutable));
+    }
+
+    final command =
+        usesPackagerExecutable ? packagerExecutable! : pythonExecutable;
+    final arguments = usesPackagerExecutable
         ? request.toCliArguments()
         : <String>[packagerScript, ...request.toCliArguments()];
-    final workingDirectory = packagerExecutable?.isNotEmpty == true
+    final workingDirectory = usesPackagerExecutable
         ? Directory.current.path
         : p.dirname(packagerScript);
 
@@ -113,6 +139,15 @@ class WallpaperPackagerService {
       ));
     }
     if (result.exitCode != 0) {
+      final combinedOutput = '${result.stdout}\n${result.stderr}';
+      if (!usesPackagerExecutable &&
+          combinedOutput.contains("No module named 'PIL'")) {
+        throw PackagerException(redactSensitivePaths(
+          '${_missingPillowMessage(pythonExecutable)}\n\n'
+          'stdout:\n${result.stdout}\n'
+          'stderr:\n${result.stderr}',
+        ));
+      }
       throw PackagerException(redactSensitivePaths(
         '打包 CLI 失败 exit=${result.exitCode}\n'
         'stdout:\n${result.stdout}\n'
@@ -145,6 +180,38 @@ class WallpaperPackagerService {
       stderr: redactSensitivePaths(result.stderr),
     );
   }
+}
+
+String? _defaultPackagerExecutable() {
+  final envPath = Platform.environment['CADILLAC_PACKAGER_CLI'];
+  if (envPath != null && envPath.isNotEmpty) {
+    return envPath;
+  }
+
+  final executableDir = File(Platform.resolvedExecutable).parent.path;
+  final executableName = Platform.isWindows
+      ? 'cadillac_wallpaper_packager.exe'
+      : 'cadillac_wallpaper_packager';
+  final candidates = <String>[
+    p.join(executableDir, 'packager_runtime', executableName),
+    p.join(executableDir, executableName),
+    if (Platform.isWindows)
+      p.join(
+        executableDir,
+        'data',
+        'flutter_assets',
+        'packager',
+        executableName,
+      ),
+  ];
+
+  for (final candidate in candidates) {
+    final normalized = p.normalize(candidate);
+    if (File(normalized).existsSync()) {
+      return normalized;
+    }
+  }
+  return null;
 }
 
 List<String> _flutterAssetRootCandidates() {
@@ -196,6 +263,10 @@ String _defaultPythonExecutable() {
   return Platform.isWindows ? 'python' : 'python3';
 }
 
+String _fallbackPythonExecutable() {
+  return Platform.isWindows ? 'python' : 'python3';
+}
+
 bool _pythonCanImportPillow(String executable) {
   try {
     final result = Process.runSync(
@@ -207,6 +278,14 @@ bool _pythonCanImportPillow(String executable) {
   } on Object {
     return false;
   }
+}
+
+String _missingPillowMessage(String executable) {
+  final installCommand = '$executable -m pip install Pillow';
+  return '当前 Python 不能加载 Pillow。\n'
+      'Python: $executable\n'
+      '请先安装 Pillow: $installCommand\n'
+      '或者设置 CADILLAC_PYTHON 指向已经安装 Pillow 的 Python。';
 }
 
 Future<ProcessResult> _runProcess(
