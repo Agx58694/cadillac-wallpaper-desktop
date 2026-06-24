@@ -289,9 +289,8 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
       if (resourceError != null) {
         throw PackagerException(resourceError);
       }
-      _appendLog('Python: ${_packagerService.pythonExecutable}');
       _appendLog(
-        '步骤 4/6 调用打包 CLI: ${WallpaperPackagerService.defaultPackagerScript()}',
+        '步骤 4/6 调用打包 Runtime: ${_packagerService.runtimeDescription}',
       );
       progressTimer = Timer.periodic(const Duration(seconds: 15), (_) {
         _appendLog(

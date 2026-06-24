@@ -15,6 +15,36 @@ void main() {
     expect(File(script!).existsSync(), isTrue);
   });
 
+  test('describes the Python script runtime', () {
+    final service = WallpaperPackagerService(
+      pythonExecutable: 'python3',
+      packagerScript: 'packager/cadillac_wallpaper_packager.py',
+      processRunner: (command, arguments, workingDirectory, {onOutput}) async {
+        return ProcessResult(1, 0, '', '');
+      },
+    );
+
+    expect(
+      service.runtimeDescription,
+      'python3 packager/cadillac_wallpaper_packager.py',
+    );
+  });
+
+  test('describes the standalone packager runtime', () {
+    final service = WallpaperPackagerService(
+      pythonExecutable: 'python-without-pillow',
+      packagerExecutable: 'packager_runtime/cadillac_wallpaper_packager.exe',
+      processRunner: (command, arguments, workingDirectory, {onOutput}) async {
+        return ProcessResult(1, 0, '', '');
+      },
+    );
+
+    expect(
+      service.runtimeDescription,
+      'packager_runtime/cadillac_wallpaper_packager.exe',
+    );
+  });
+
   test('builds a shared CLI invocation for both desktop modes', () async {
     final calls = <ProcessCall>[];
     final tempDir = await Directory.systemTemp.createTemp('packager_service_');
