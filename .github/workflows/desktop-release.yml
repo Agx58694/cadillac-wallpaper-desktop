@@ -33,7 +33,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.13.9'
+          flutter-version: '3.22.3'
           cache: true
 
       - name: Enable macOS desktop
@@ -53,15 +53,29 @@ jobs:
 
       - name: Verify macOS architecture
         run: |
-          APP_BINARY="build/macos/Build/Products/Release/Cadillac Packager.app/Contents/MacOS/cadillac_wallpaper_desktop"
+          shopt -s nullglob
+          APPS=(build/macos/Build/Products/Release/*.app)
+          if [ "${#APPS[@]}" -ne 1 ]; then
+            echo "Expected one built .app, found ${#APPS[@]}"
+            printf '%s\n' "${APPS[@]}"
+            exit 1
+          fi
+          APP_PATH="${APPS[0]}"
+          BINARIES=("$APP_PATH"/Contents/MacOS/*)
+          if [ "${#BINARIES[@]}" -lt 1 ]; then
+            echo "No executable found in $APP_PATH/Contents/MacOS"
+            exit 1
+          fi
+          APP_BINARY="${BINARIES[0]}"
           ARCH_INFO="$(lipo -info "$APP_BINARY")"
           echo "$ARCH_INFO"
           echo "$ARCH_INFO" | grep "${{ matrix.expected_arch }}"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
 
       - name: Zip macOS app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
-            "build/macos/Build/Products/Release/Cadillac Packager.app" \
+            "$APP_PATH" \
             "${{ matrix.zip_name }}"
 
       - name: Upload macOS artifact
@@ -82,7 +96,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.13.9'
+          flutter-version: '3.22.3'
           cache: true
 
       - name: Enable Windows desktop
