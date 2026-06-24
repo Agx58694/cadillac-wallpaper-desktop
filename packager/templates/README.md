@@ -1,5 +1,11 @@
-# Template Directory
+# Bundled Template Directory
 
-Place a compatible OTA template zip here for local development only, or set `CADILLAC_INPUT_ZIP` to an absolute path outside the repository.
+This directory contains the currently supported bundled football template:
 
-Template zips are private, user-supplied inputs. They are intentionally ignored by Git because they may contain OEM or third-party assets that are not covered by this repository's license.
+```text
+BFA3A0F4596C4C57A6BCDC1EB3348932.zip
+```
+
+The app uses it by default when `CADILLAC_INPUT_ZIP` is not set. Current packaging rules only support this football template. Other official templates have different shapes and will be added in later updates.
+
+Keep any additional local template zips out of Git unless they are intentionally supported and redistributable.

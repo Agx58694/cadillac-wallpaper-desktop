@@ -10,5 +10,8 @@ Windows build steps:
 If Windows asks for a reboot after installing Visual Studio Build Tools,
 reboot and run build_windows_one_click.cmd again.
 
-Public build kits do not include private OTA template zips. Set CADILLAC_INPUT_ZIP
-to your compatible local template zip before running the packaged app.
+The build kit includes the currently supported football template. The packaged
+app can build packages without setting CADILLAC_INPUT_ZIP.
+
+Current limitation: only the football template is supported. Other official
+theme templates will be added in later updates.

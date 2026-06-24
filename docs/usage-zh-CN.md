@@ -26,7 +26,10 @@ xattr -dr com.apple.quarantine "/path/to/Cadillac Packager.app"
 - 黑夜主图：PNG，尺寸必须是 `2198x367`。
 - Python 3。
 - Pillow：Python 图片处理库。
-- 兼容的 OEM OTA 模板 zip。公开发行包不会内置模板 zip。
+
+应用已经内置当前支持的足球模板，正常下载 release 后不需要额外配置模板 zip。
+
+> 当前版本只适配足球模板这一款。其他官方主题模板结构不同，后续版本再逐步适配。
 
 安装 Pillow：
 
@@ -40,15 +43,15 @@ Windows 也可以使用：
 py -m pip install Pillow
 ```
 
-## 配置模板 zip
+## 可选：覆盖模板 zip
 
-应用通过环境变量读取模板 zip：
+默认会使用内置足球模板。只有在需要测试兼容模板时，才通过环境变量覆盖：
 
 ```bash
 CADILLAC_INPUT_ZIP=/path/to/template.zip
 ```
 
-macOS 双击打开的应用不一定继承 shell 环境变量。推荐用终端启动：
+macOS 双击打开的应用不一定继承 shell 环境变量。如果要覆盖模板，推荐用终端启动：
 
 ```bash
 export CADILLAC_INPUT_ZIP="/path/to/template.zip"
@@ -142,9 +145,9 @@ cwtheme/
 
 ## 常见问题
 
-### 提示模板 zip 未配置
+### 提示模板 zip 缺失
 
-设置 `CADILLAC_INPUT_ZIP`，然后重新启动应用。
+重新下载包含内置足球模板的 release。也可以设置 `CADILLAC_INPUT_ZIP` 指向兼容模板 zip 后重新启动应用。
 
 ### 提示 Pillow 不可用
 

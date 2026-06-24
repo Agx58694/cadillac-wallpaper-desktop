@@ -267,8 +267,8 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
       final paths = _resolveBuildPaths(now);
       _appendLog('步骤 2/6 准备输出目录: ${p.dirname(paths.outputZipPath)}');
       final buildResources = await _resolveBuildResources();
-      final inputZipPath =
-          _envPath('CADILLAC_INPUT_ZIP') ?? buildResources.inputZipPath;
+      final envInputZipPath = _envPath('CADILLAC_INPUT_ZIP');
+      final inputZipPath = envInputZipPath ?? buildResources.inputZipPath;
       final astcencPath =
           _envPath('CADILLAC_ASTCENC') ?? buildResources.astcencPath;
       final lightDimMaskPath = _envPath('CADILLAC_LIGHT_DIM_MASK') ??
@@ -276,6 +276,11 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
       final darkDimMaskPath =
           _envPath('CADILLAC_DARK_DIM_MASK') ?? buildResources.darkDimMaskPath;
       _appendLog('步骤 3/6 解析内置模板和 ASTC 工具');
+      _appendLog(
+        envInputZipPath == null
+            ? '未设置 CADILLAC_INPUT_ZIP，使用内置足球模板'
+            : '使用 CADILLAC_INPUT_ZIP 指定的模板',
+      );
       _appendResourceLog('模板 zip', inputZipPath);
       _appendResourceLog('astcenc', astcencPath);
       _appendResourceLog('白天 alpha mask', lightDimMaskPath);
@@ -546,10 +551,10 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
 
   String? _validateInputZipResource(String? path) {
     if (path == null || path.trim().isEmpty) {
-      return '模板 zip 未配置。公开版不会内置 OEM 模板，请设置 CADILLAC_INPUT_ZIP 指向本机模板 zip。';
+      return '模板 zip 未配置。请重新下载包含内置足球模板的版本，或设置 CADILLAC_INPUT_ZIP 指向兼容模板 zip。';
     }
     if (!File(path).existsSync()) {
-      return '模板 zip 不存在，请检查 CADILLAC_INPUT_ZIP 或本地模板文件: $path';
+      return '模板 zip 不存在，请检查内置足球模板或 CADILLAC_INPUT_ZIP: $path';
     }
     return null;
   }

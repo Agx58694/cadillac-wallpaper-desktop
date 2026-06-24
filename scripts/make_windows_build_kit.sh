@@ -28,12 +28,9 @@ done
 zip_excludes=(
   '*/.DS_Store'
   '*/__pycache__/*'
+  'packager/templates/*.zip'
   'windows/flutter/ephemeral/*'
 )
-
-if [[ "${CADILLAC_INCLUDE_PRIVATE_TEMPLATE:-0}" != "1" ]]; then
-  zip_excludes+=('packager/templates/*.zip')
-fi
 
 zip -q -r "$ZIP_PATH" \
   analysis_options.yaml \
@@ -48,6 +45,8 @@ zip -q -r "$ZIP_PATH" \
   test \
   windows \
   -x "${zip_excludes[@]}"
+
+zip -q "$ZIP_PATH" packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip
 
 if unzip -p "$ZIP_PATH" \
   '*.dart' '*.yaml' '*.yml' '*.ps1' '*.py' '*.txt' '*.md' '*.cmake' '*.cpp' '*.h' '*.rc' '*.manifest' \

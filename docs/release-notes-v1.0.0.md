@@ -15,6 +15,7 @@ Windows x64 版本后续补发。
 - 共用 `cadillac_wallpaper_packager.py` Python CLI，不重新实现 KZB/ASTC 规则。
 - UI 读取 report 并展示 zip、PNG、preview alpha、KZB size、record offset、`rec0`、透明 RGB、KZB/VCD 拼接 MAE 等校验。
 - 支持拖拽图片、进度日志、路径脱敏、打包完成后打开输出文件夹。
+- 内置当前支持的足球模板。
 
 ## 使用说明
 
@@ -22,4 +23,4 @@ Windows x64 版本后续补发。
 
 https://github.com/Agx58694/cadillac-wallpaper-desktop/blob/v1.0.0/docs/usage-zh-CN.md
 
-公开发行包不会内置 OEM OTA 模板 zip。运行前需要提供兼容模板，并通过 `CADILLAC_INPUT_ZIP` 指定。
+当前版本只适配足球模板这一款。其他官方主题模板结构不同，后续版本再逐步适配。

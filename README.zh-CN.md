@@ -18,6 +18,9 @@
 - 支持 macOS 桌面构建，包括 Intel 和 Apple Silicon。
 - 支持 Windows x64 桌面构建。
 - 支持拖拽导入图片、进度日志、路径脱敏、打包后快速打开输出文件夹。
+- 内置足球模板，下载后不需要另行配置模板 zip 即可打包。
+
+> 当前版本只适配足球模板这一款。其他官方主题模板结构不同，后续版本再逐步适配。
 
 ## 主题包结构
 
@@ -36,9 +39,17 @@ cwtheme/
   report/package-report.json
 ```
 
-## 必需的私有输入
+## 内置模板和可选覆盖
 
-公开源码仓库不会内置 OEM OTA 模板 zip。要生成真实可用的壁纸包，需要在运行时提供你自己的兼容模板包：
+应用默认内置足球模板：
+
+```text
+BFA3A0F4596C4C57A6BCDC1EB3348932 / cadi_wallpaper05111930
+```
+
+正常下载 release 后可以直接打包，不需要额外设置模板 zip。
+
+如果你要用自己的兼容模板包，可以通过环境变量覆盖内置模板：
 
 ```bash
 export CADILLAC_INPUT_ZIP=/path/to/your/template.zip
@@ -55,6 +66,8 @@ export CADILLAC_DARK_DIM_MASK=/path/to/dark_dim_alpha_fixed_smoothed_used.png
 ```
 
 Windows 下可以在 `cmd.exe` 中使用 `set NAME=value`，或在 PowerShell 中使用 `$env:NAME="value"`。
+
+注意：当前打包规则只适配足球模板。即使使用 `CADILLAC_INPUT_ZIP` 覆盖到其他官方主题模板，本版本也不保证能正确生成。
 
 ## 开发验证
 
@@ -135,12 +148,4 @@ scripts/make_windows_build_kit.sh
 dist\CadillacPackager-windows-x64.zip
 ```
 
-公开版构建包默认排除私有 OTA 模板 zip。运行打包后的 app 前，请在目标机器上设置 `CADILLAC_INPUT_ZIP`。
-
-如果要生成包含本地模板 zip 的私有内部构建包，可以运行：
-
-```bash
-CADILLAC_INCLUDE_PRIVATE_TEMPLATE=1 scripts/make_windows_build_kit.sh
-```
-
-除非模板具备可再分发授权，否则不要公开发布这个私有构建包。
+Windows 构建包会包含当前支持的足球模板。复制到 Windows 机器后，打包出的 app 默认也可以直接使用该内置模板。

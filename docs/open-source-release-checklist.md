@@ -17,7 +17,8 @@ rg -n '/Users/[A-Za-z0-9._-]+|C:\\Users\\[A-Za-z0-9._-]+' \
 
 ## Do Not Publish
 
-- `packager/templates/*.zip`
+- Any extra `packager/templates/*.zip` except the intentionally bundled football template:
+  `packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip`
 - Generated `.cwtheme` packages
 - Generated OTA zips
 - `package-report.json` or `*-report.json`
@@ -37,9 +38,9 @@ rg -n '/Users/[A-Za-z0-9._-]+|C:\\Users\\[A-Za-z0-9._-]+' \
 
 1. Create an empty GitHub repository.
 2. Initialize the local repository from this project directory.
-3. Add files normally so `.gitignore` excludes private resources.
+3. Add files normally so `.gitignore` excludes generated resources.
 4. Review the staged file list before the first commit.
-5. Push to GitHub only after confirming no private template or local path is staged.
+5. Push to GitHub only after confirming no extra template zip or local path is staged.
 
 Suggested commands:
 

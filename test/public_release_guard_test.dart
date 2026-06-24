@@ -3,16 +3,34 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('public source does not bundle private OTA template zips', () async {
+  test('public source only bundles the supported football OTA template',
+      () async {
     final pubspec = await File('pubspec.yaml').readAsString();
     final gitignore = await File('.gitignore').readAsString();
     final buildKitScript =
         await File('scripts/make_windows_build_kit.sh').readAsString();
+    final templateDirectory = Directory('packager/templates');
+    final templateZips = await templateDirectory
+        .list()
+        .where((entity) => entity is File && entity.path.endsWith('.zip'))
+        .map((entity) => entity.uri.pathSegments.last)
+        .toList();
 
-    expect(pubspec, isNot(contains('packager/templates/')));
+    expect(templateZips, ['BFA3A0F4596C4C57A6BCDC1EB3348932.zip']);
+    expect(
+      pubspec,
+      contains('packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip'),
+    );
     expect(gitignore, contains('packager/templates/*.zip'));
-    expect(buildKitScript, contains('packager/templates/*.zip'));
-    expect(buildKitScript, contains('CADILLAC_INCLUDE_PRIVATE_TEMPLATE'));
+    expect(
+      gitignore,
+      contains('!packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip'),
+    );
+    expect(buildKitScript, contains("'packager/templates/*.zip'"));
+    expect(
+      buildKitScript,
+      contains('packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip'),
+    );
   });
 
   test('public docs do not contain local user paths', () async {
@@ -26,6 +44,7 @@ void main() {
       'docs/open-source-release-checklist.md',
       'docs/usage-zh-CN.md',
       'docs/release-notes-v1.0.0.md',
+      'docs/release-notes-v1.0.1.md',
       'WINDOWS_BUILD_README.txt',
     ];
     final localPathPattern = RegExp(

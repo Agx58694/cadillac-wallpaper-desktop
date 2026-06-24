@@ -61,9 +61,10 @@ cadillac_ota_wallpaper.zip
 **/__pycache__/
 *.py[cod]
 
-# Private or user-supplied OTA resources.
-# Do not publish OEM template packages unless you have explicit rights.
+# Bundled template support. Only the football template below is intentionally
+# checked in; keep any other user-supplied template zips local.
 packager/templates/*.zip
+!packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip
 !packager/templates/README.md
 
 # Local-only resource overrides.

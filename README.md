@@ -18,6 +18,9 @@ Chinese usage guide: [docs/usage-zh-CN.md](docs/usage-zh-CN.md).
 - macOS desktop support for Intel and Apple Silicon builds.
 - Windows x64 desktop support.
 - Drag-and-drop image import, progress logs, path redaction, and quick open-output-folder actions.
+- Bundled football template, so release downloads can build packages without configuring a separate template zip.
+
+> The current release only supports the football template. Other official template shapes differ and will be supported in later updates.
 
 ## Theme Package Format
 
@@ -36,9 +39,17 @@ cwtheme/
   report/package-report.json
 ```
 
-## Required Private Input
+## Bundled Template And Optional Override
 
-The public source tree does not need to include an OEM OTA template zip. To build real wallpaper packages, provide your own compatible template package at runtime:
+The app bundles the football template by default:
+
+```text
+BFA3A0F4596C4C57A6BCDC1EB3348932 / cadi_wallpaper05111930
+```
+
+Release downloads can build packages directly without setting a template zip.
+
+To test with your own compatible template package, override the bundled template at runtime:
 
 ```bash
 export CADILLAC_INPUT_ZIP=/path/to/your/template.zip
@@ -55,6 +66,8 @@ export CADILLAC_DARK_DIM_MASK=/path/to/dark_dim_alpha_fixed_smoothed_used.png
 ```
 
 On Windows use `set NAME=value` in `cmd.exe` or `$env:NAME="value"` in PowerShell.
+
+The current packaging rules only support the football template. Overriding `CADILLAC_INPUT_ZIP` with another official theme is not guaranteed to work in this release.
 
 ## Development
 
@@ -135,12 +148,4 @@ Copy `dist/CadillacPackager-windows-build-kit.zip` to a Windows x64 machine, ext
 dist\CadillacPackager-windows-x64.zip
 ```
 
-The public build kit excludes private OTA template zips by default. Set `CADILLAC_INPUT_ZIP` on the target machine before running the packaged app.
-
-For a private internal build kit that includes a local template zip, run:
-
-```bash
-CADILLAC_INCLUDE_PRIVATE_TEMPLATE=1 scripts/make_windows_build_kit.sh
-```
-
-Do not publish that archive unless the template is redistributable.
+The Windows build kit includes the currently supported football template. After copying it to a Windows machine, the packaged app can use the bundled template by default.
