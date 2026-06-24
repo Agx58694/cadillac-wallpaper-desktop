@@ -8,6 +8,8 @@
 
 > 这是非官方项目，与 General Motors、Cadillac 或相关商标持有人没有从属、赞助、背书或授权关系。详见 [DISCLAIMER.md](DISCLAIMER.md)。
 
+完整使用说明见 [docs/usage-zh-CN.md](docs/usage-zh-CN.md)。
+
 ## 功能
 
 - 标准 OTA 模式：选择白天和黑夜两张 `2198x367` PNG 主图，输出 OTA zip 和对应的 report JSON。

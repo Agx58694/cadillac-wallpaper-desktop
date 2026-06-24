@@ -8,8 +8,22 @@ permissions:
 
 jobs:
   macos-release:
-    name: macOS release
-    runs-on: macos-14
+    name: macOS ${{ matrix.label }} release
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Apple Silicon arm64
+            runner: macos-14
+            expected_arch: arm64
+            artifact_name: CadillacPackager-macos-arm64
+            zip_name: CadillacPackager-macos-arm64.zip
+          - label: Intel x86_64
+            runner: macos-15-intel
+            expected_arch: x86_64
+            artifact_name: CadillacPackager-macos-x64
+            zip_name: CadillacPackager-macos-x64.zip
 
     steps:
       - name: Checkout
@@ -36,21 +50,24 @@ jobs:
       - name: Build macOS app
         run: flutter build macos --release
 
-      - name: Verify universal architecture
+      - name: Verify macOS architecture
         run: |
-          lipo -info build/macos/Build/Products/Release/cadillac_wallpaper_desktop.app/Contents/MacOS/cadillac_wallpaper_desktop
+          APP_BINARY="build/macos/Build/Products/Release/Cadillac Packager.app/Contents/MacOS/cadillac_wallpaper_desktop"
+          ARCH_INFO="$(lipo -info "$APP_BINARY")"
+          echo "$ARCH_INFO"
+          echo "$ARCH_INFO" | grep "${{ matrix.expected_arch }}"
 
       - name: Zip macOS app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
-            build/macos/Build/Products/Release/cadillac_wallpaper_desktop.app \
-            CadillacPackager-macos.zip
+            "build/macos/Build/Products/Release/Cadillac Packager.app" \
+            "${{ matrix.zip_name }}"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CadillacPackager-macos
-          path: CadillacPackager-macos.zip
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.zip_name }}
 
   windows-release:
     name: Windows x64 release

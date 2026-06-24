@@ -24,6 +24,8 @@ void main() {
       'DISCLAIMER.md',
       'THIRD_PARTY_NOTICES.md',
       'docs/open-source-release-checklist.md',
+      'docs/usage-zh-CN.md',
+      'docs/release-notes-v1.0.0.md',
       'WINDOWS_BUILD_README.txt',
     ];
     final localPathPattern = RegExp(

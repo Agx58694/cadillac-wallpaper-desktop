@@ -8,6 +8,8 @@ The desktop UI does not reimplement KZB, ASTC, crop, alpha, or dim-mask rules. B
 
 > This is an unofficial project. It is not affiliated with, endorsed by, or sponsored by General Motors or Cadillac. See [DISCLAIMER.md](DISCLAIMER.md).
 
+Chinese usage guide: [docs/usage-zh-CN.md](docs/usage-zh-CN.md).
+
 ## Features
 
 - Standard OTA mode: select light and dark `2198x367` PNG masters, then output an OTA zip and a sibling report JSON.
