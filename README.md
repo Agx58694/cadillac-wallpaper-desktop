@@ -142,9 +142,3 @@ CADILLAC_INCLUDE_PRIVATE_TEMPLATE=1 scripts/make_windows_build_kit.sh
 ```
 
 Do not publish that archive unless the template is redistributable.
-
-## Repository Safety
-
-- Do not commit private OTA template packages, generated `.cwtheme` files, generated OTA zips, reports, local library data, or build outputs.
-- Do not paste local absolute paths into docs, issues, reports, or screenshots.
-- Review [docs/open-source-release-checklist.md](docs/open-source-release-checklist.md) before making a repository public.

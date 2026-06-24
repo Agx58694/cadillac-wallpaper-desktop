@@ -142,9 +142,3 @@ CADILLAC_INCLUDE_PRIVATE_TEMPLATE=1 scripts/make_windows_build_kit.sh
 ```
 
 除非模板具备可再分发授权，否则不要公开发布这个私有构建包。
-
-## 仓库安全
-
-- 不要提交私有 OTA 模板包、生成的 `.cwtheme`、生成的 OTA zip、report、本地主题库数据或构建产物。
-- 不要把本机绝对路径写进文档、issue、report 或截图。
-- 公开仓库前请先检查 [docs/open-source-release-checklist.md](docs/open-source-release-checklist.md)。
