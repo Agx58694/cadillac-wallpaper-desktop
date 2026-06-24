@@ -156,29 +156,17 @@ void main() {
     final tempDir = await Directory.systemTemp.createTemp('packager_stream_');
     addTearDown(() => tempDir.delete(recursive: true));
 
-    final script = File(p.join(tempDir.path, 'fake_packager.sh'));
-    await script.writeAsString('''
-#!/bin/sh
-echo "[cadillac-packager] step 1/2 fake start"
-sleep 0.05
-while [ "\$#" -gt 0 ]; do
-  case "\$1" in
-    --report)
-      report="\$2"
-      shift 2
-      ;;
-    *)
-      shift
-      ;;
-  esac
-done
-printf '{"zip_test_bad_file":null}' > "\$report"
-echo "[cadillac-packager] step 2/2 fake done"
-''');
-    await Process.run('chmod', <String>['755', script.path]);
-
     final service = WallpaperPackagerService(
-      packagerExecutable: script.path,
+      pythonExecutable: 'python3',
+      packagerScript: p.join(tempDir.path, 'cadillac_wallpaper_packager.py'),
+      processRunner: (command, arguments, workingDirectory, {onOutput}) async {
+        onOutput?.call('[cadillac-packager] step 1/2 fake start');
+        final reportIndex = arguments.indexOf('--report');
+        final reportPath = arguments[reportIndex + 1];
+        await File(reportPath).writeAsString('{"zip_test_bad_file":null}');
+        onOutput?.call('[cadillac-packager] step 2/2 fake done');
+        return ProcessResult(42, 0, '', '');
+      },
     );
     final streamed = <String>[];
 
