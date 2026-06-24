@@ -10,6 +10,18 @@
 
 完整使用说明见 [docs/usage-zh-CN.md](docs/usage-zh-CN.md)。
 
+## 下载
+
+从 [GitHub 最新 Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest) 下载桌面程序。
+
+| 系统 | 下载文件 |
+| --- | --- |
+| macOS Apple Silicon / M 系列 | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
+| macOS Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
+| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-windows-x64.zip) |
+
+请下载上表中的 release assets。Release 页面里的 `Source code` 压缩包是源码包，不是可直接运行的桌面程序。
+
 ## 功能
 
 - 标准 OTA 模式：选择白天和黑夜两张 `2198x367` PNG 主图，输出 OTA zip 和对应的 report JSON。

@@ -10,6 +10,17 @@ The desktop UI does not reimplement KZB, ASTC, crop, alpha, or dim-mask rules. B
 
 Chinese usage guide: [docs/usage-zh-CN.md](docs/usage-zh-CN.md).
 
+## Download
+
+Download the desktop app from the [latest GitHub Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest).
+
+| Platform | Download |
+| --- | --- |
+| macOS Apple Silicon / Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
+| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-windows-x64.zip) |
+
+Use the release assets above. The `Source code` archives on the release page are for developers and are not ready-to-run app packages.
+
 ## Features
 
 - Standard OTA mode: select light and dark `2198x367` PNG masters, then output an OTA zip and a sibling report JSON.

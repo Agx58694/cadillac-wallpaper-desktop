@@ -4,13 +4,15 @@ Cadillac Wallpaper Desktop 是一个桌面打包工具，用两张 `2198x367` PN
 
 ## 下载哪个版本
 
-从 GitHub Releases 下载对应系统的 zip：
+从 [GitHub 最新 Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest) 下载对应系统的 zip：
 
 | 系统 | 下载文件 |
 | --- | --- |
-| macOS Apple Silicon / M 系列 | `CadillacPackager-macos-universal.zip` |
-| macOS Intel | `CadillacPackager-macos-universal.zip` |
-| Windows x64 | `CadillacPackager-windows-x64.zip` |
+| macOS Apple Silicon / M 系列 | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
+| macOS Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
+| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-windows-x64.zip) |
+
+Release 页面里会同时出现 `Source code (zip)` 和 `Source code (tar.gz)`。这两个是源码包，不是可直接运行的桌面程序；普通用户请下载上表中的 `CadillacPackager-*.zip`。
 
 解压后直接运行应用。macOS 如果提示来自未认证开发者，可以右键应用选择“打开”；如果仍被阻止，可在终端执行：
 
