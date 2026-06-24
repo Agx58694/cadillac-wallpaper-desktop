@@ -1,12 +1,13 @@
 # Cadillac Wallpaper Desktop v1.0.0
 
-首个公开桌面版本，提供 macOS 和 Windows 桌面打包程序。
+首个公开桌面版本，先发布 macOS Apple Silicon 和 macOS Intel 打包程序。
 
 ## 发行包
 
-- `CadillacPackager-windows-x64.zip`：Windows x64。
 - `CadillacPackager-macos-arm64.zip`：macOS Apple Silicon / M 系列。
 - `CadillacPackager-macos-x64.zip`：macOS Intel。
+
+Windows x64 版本后续补发。
 
 ## 功能
 
