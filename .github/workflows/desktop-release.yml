@@ -8,22 +8,8 @@ permissions:
 
 jobs:
   macos-release:
-    name: macOS ${{ matrix.label }} release
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Apple Silicon arm64
-            runner: macos-14
-            expected_arch: arm64
-            artifact_name: CadillacPackager-macos-arm64
-            zip_name: CadillacPackager-macos-arm64.zip
-          - label: Intel x86_64
-            runner: macos-15-intel
-            expected_arch: x86_64
-            artifact_name: CadillacPackager-macos-x64
-            zip_name: CadillacPackager-macos-x64.zip
+    name: macOS Universal release
+    runs-on: macos-14
 
     steps:
       - name: Checkout
@@ -69,17 +55,18 @@ jobs:
           APP_BINARY="${BINARIES[0]}"
           ARCH_INFO="$(lipo -info "$APP_BINARY")"
           echo "$ARCH_INFO"
-          echo "$ARCH_INFO" | grep "${{ matrix.expected_arch }}"
+          echo "$ARCH_INFO" | grep "x86_64"
+          echo "$ARCH_INFO" | grep "arm64"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
 
       - name: Zip macOS app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
             "$APP_PATH" \
-            "${{ matrix.zip_name }}"
+            CadillacPackager-macos-universal.zip
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.zip_name }}
+          name: CadillacPackager-macos-universal
+          path: CadillacPackager-macos-universal.zip

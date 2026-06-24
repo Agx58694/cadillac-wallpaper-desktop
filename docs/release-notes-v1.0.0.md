@@ -1,11 +1,10 @@
 # Cadillac Wallpaper Desktop v1.0.0
 
-首个公开桌面版本，先发布 macOS Apple Silicon 和 macOS Intel 打包程序。
+首个公开桌面版本，先发布 macOS Universal 打包程序，单个 `.app` 同时支持 Apple Silicon 和 Intel。
 
 ## 发行包
 
-- `CadillacPackager-macos-arm64.zip`：macOS Apple Silicon / M 系列。
-- `CadillacPackager-macos-x64.zip`：macOS Intel。
+- `CadillacPackager-macos-universal.zip`：macOS Apple Silicon / M 系列和 macOS Intel。
 
 Windows x64 版本后续补发。
 

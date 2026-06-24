@@ -8,8 +8,8 @@ Cadillac Wallpaper Desktop 是一个桌面打包工具，用两张 `2198x367` PN
 
 | 系统 | 下载文件 |
 | --- | --- |
-| macOS Apple Silicon / M 系列 | `CadillacPackager-macos-arm64.zip` |
-| macOS Intel | `CadillacPackager-macos-x64.zip` |
+| macOS Apple Silicon / M 系列 | `CadillacPackager-macos-universal.zip` |
+| macOS Intel | `CadillacPackager-macos-universal.zip` |
 | Windows x64 | 后续补发 |
 
 解压后直接运行应用。macOS 如果提示来自未认证开发者，可以右键应用选择“打开”；如果仍被阻止，可在终端执行：
