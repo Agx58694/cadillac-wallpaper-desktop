@@ -1,5 +1,7 @@
 # Cadillac Wallpaper Desktop
 
+[中文](README.zh-CN.md) | English
+
 Flutter desktop app for building Cadillac-compatible OTA wallpaper packages from two `2198x367` PNG masters.
 
 The desktop UI does not reimplement KZB, ASTC, crop, alpha, or dim-mask rules. Both modes call the same Python CLI, `packager/cadillac_wallpaper_packager.py`, then read `package-report.json` and display the validation checks in the app.

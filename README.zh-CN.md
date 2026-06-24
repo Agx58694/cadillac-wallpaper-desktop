@@ -1,0 +1,150 @@
+# Cadillac Wallpaper Desktop
+
+中文 | [English](README.md)
+
+这是一个 Flutter 桌面程序，用于把两张 `2198x367` PNG 主图打包成 Cadillac 兼容的 OTA 壁纸包。
+
+桌面端不会重新实现 KZB、ASTC、裁剪、alpha 或 dim-mask 规则。两个模式都复用同一个 Python CLI：`packager/cadillac_wallpaper_packager.py`，然后读取 `package-report.json` 并在界面中展示校验结果。
+
+> 这是非官方项目，与 General Motors、Cadillac 或相关商标持有人没有从属、赞助、背书或授权关系。详见 [DISCLAIMER.md](DISCLAIMER.md)。
+
+## 功能
+
+- 标准 OTA 模式：选择白天和黑夜两张 `2198x367` PNG 主图，输出 OTA zip 和对应的 report JSON。
+- Android 联动主题包模式：选择白天/黑夜主图并填写主题信息，输出 `.cwtheme`，同时保存到桌面端本地主题库。
+- 基于 report 的校验展示：zip 完整性、PNG 尺寸/alpha、preview alpha 是否复用模板、KZB size、KZB record offset、`rec0`、透明 RGB 规则、KZB/VCD 拼接 MAE。
+- 支持 macOS 桌面构建，包括 Intel 和 Apple Silicon。
+- 支持 Windows x64 桌面构建。
+- 支持拖拽导入图片、进度日志、路径脱敏、打包后快速打开输出文件夹。
+
+## 主题包结构
+
+`.cwtheme` 文件内容如下：
+
+```text
+cwtheme/
+  manifest.json
+  previews/light_preview_2198x367.png
+  previews/dark_preview_2198x367.png
+  previews/thumbnail_light.png
+  previews/thumbnail_dark.png
+  masters/light_master_2198x367.png
+  masters/dark_master_2198x367.png
+  payload/ota_wallpaper.zip
+  report/package-report.json
+```
+
+## 必需的私有输入
+
+公开源码仓库不会内置 OEM OTA 模板 zip。要生成真实可用的壁纸包，需要在运行时提供你自己的兼容模板包：
+
+```bash
+export CADILLAC_INPUT_ZIP=/path/to/your/template.zip
+```
+
+可选覆盖项：
+
+```bash
+export CADILLAC_PYTHON=/path/to/python-with-pillow
+export CADILLAC_PACKAGER_SCRIPT=/path/to/cadillac_wallpaper_packager.py
+export CADILLAC_ASTCENC=/path/to/astcenc-or-astcenc.exe
+export CADILLAC_LIGHT_DIM_MASK=/path/to/light_dim_alpha_fixed_smoothed_used.png
+export CADILLAC_DARK_DIM_MASK=/path/to/dark_dim_alpha_fixed_smoothed_used.png
+```
+
+Windows 下可以在 `cmd.exe` 中使用 `set NAME=value`，或在 PowerShell 中使用 `$env:NAME="value"`。
+
+## 开发验证
+
+```bash
+flutter pub get
+flutter analyze
+flutter test --coverage
+```
+
+当前覆盖率目标是 80% 以上行覆盖率。
+
+## macOS 构建
+
+```bash
+flutter config --enable-macos-desktop
+flutter pub get
+flutter analyze
+flutter test
+flutter build macos --release
+```
+
+预期产物路径：
+
+```text
+build/macos/Build/Products/Release/cadillac_wallpaper_desktop.app
+```
+
+架构验证：
+
+```bash
+lipo -info build/macos/Build/Products/Release/cadillac_wallpaper_desktop.app/Contents/MacOS/cadillac_wallpaper_desktop
+```
+
+最终 macOS release 应同时包含 `x86_64` 和 `arm64`。
+
+## Windows x64 构建
+
+在 Windows x64 主机上运行：
+
+```powershell
+flutter config --enable-windows-desktop
+flutter pub get
+flutter analyze
+flutter test --coverage
+flutter build windows --release
+```
+
+预期 Windows 产物目录：
+
+```text
+build\windows\x64\runner\Release\
+```
+
+预期可执行文件：
+
+```text
+build\windows\x64\runner\Release\cadillac_wallpaper_desktop.exe
+```
+
+Windows 验证命令：
+
+```powershell
+Test-Path build\windows\x64\runner\Release\cadillac_wallpaper_desktop.exe
+Get-Item build\windows\x64\runner\Release\cadillac_wallpaper_desktop.exe
+```
+
+## Windows 一键构建包
+
+在 macOS 或 Linux 上创建 Windows 构建包：
+
+```bash
+scripts/make_windows_build_kit.sh
+```
+
+把 `dist/CadillacPackager-windows-build-kit.zip` 复制到 Windows x64 机器，解压后右键 `build_windows_one_click.cmd`，选择“以管理员身份运行”。最终 release 包会生成在：
+
+```text
+dist\CadillacPackager-windows-x64.zip
+```
+
+公开版构建包默认排除私有 OTA 模板 zip。运行打包后的 app 前，请在目标机器上设置 `CADILLAC_INPUT_ZIP`。
+
+如果要生成包含本地模板 zip 的私有内部构建包，可以运行：
+
+```bash
+CADILLAC_INCLUDE_PRIVATE_TEMPLATE=1 scripts/make_windows_build_kit.sh
+```
+
+除非模板具备可再分发授权，否则不要公开发布这个私有构建包。
+
+## 仓库安全
+
+- 不要提交私有 OTA 模板包、生成的 `.cwtheme`、生成的 OTA zip、report、本地主题库数据或构建产物。
+- 不要把本机绝对路径写进文档、issue、report 或截图。
+- 公开仓库前请先检查 [docs/open-source-release-checklist.md](docs/open-source-release-checklist.md)。

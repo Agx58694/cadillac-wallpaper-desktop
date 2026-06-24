@@ -18,6 +18,7 @@ void main() {
   test('public docs do not contain local user paths', () async {
     final docs = <String>[
       'README.md',
+      'README.zh-CN.md',
       'CONTRIBUTING.md',
       'SECURITY.md',
       'DISCLAIMER.md',
