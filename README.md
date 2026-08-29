@@ -160,3 +160,15 @@ dist\CadillacPackager-windows-x64.zip
 ```
 
 The Windows build kit includes the currently supported football template. After copying it to a Windows machine, the packaged app can use the bundled template by default.
+
+## Community
+
+This project will continue as an open-source and free Cadillac wallpaper tooling series. The wallpaper packager is available now; the wallpaper installer is still an unverified work in progress.
+
+I am looking for Cadillac owners who want to help improve the tools, test different vehicles and system versions, share product suggestions, or help with tutorials, posts, and videos. Scan the WeChat QR code below to get in touch.
+
+<img src="docs/assets/wechat-contact.png" alt="WeChat contact" width="240">
+
+Good-faith learning, discussion, forks, and contributions are welcome. Copying this open-source work, rebranding it, and selling it for profit is not. This tooling series is intended to stay open-source and free, and contributors are expected to respect the work shared here.
+
+禁止偷电
