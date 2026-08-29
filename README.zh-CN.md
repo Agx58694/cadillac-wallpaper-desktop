@@ -10,6 +10,10 @@
 
 完整使用说明见 [docs/usage-zh-CN.md](docs/usage-zh-CN.md)。
 
+## 搜索关键词
+
+Cadillac 壁纸、凯迪拉克车机壁纸、凯迪拉克壁纸打包、车机 OTA 壁纸、Cadillac wallpaper packager、Flutter desktop、macOS、Windows、`.cwtheme`、Android 联动主题包、足球模板。
+
 ## 下载
 
 从 [GitHub 最新 Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest) 下载桌面程序。

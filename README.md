@@ -10,6 +10,10 @@ The desktop UI does not reimplement KZB, ASTC, crop, alpha, or dim-mask rules. B
 
 Chinese usage guide: [docs/usage-zh-CN.md](docs/usage-zh-CN.md).
 
+## Keywords
+
+Cadillac wallpaper, Cadillac car wallpaper, Cadillac wallpaper packager, OTA wallpaper package, Flutter desktop, macOS, Windows, `.cwtheme`, Android-linked theme package, football template.
+
 ## Download
 
 Download the desktop app from the [latest GitHub Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest).
