@@ -7,8 +7,47 @@ permissions:
   contents: read
 
 jobs:
+  macos-runtime:
+    name: macOS packager runtime (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-15-intel
+            python_arch: x64
+          - arch: arm64
+            runner: macos-14
+            python_arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          architecture: ${{ matrix.python_arch }}
+
+      - name: Install packager runtime dependencies
+        run: python -m pip install --requirement scripts/packager_runtime_requirements.txt
+
+      - name: Build and exercise packager runtime
+        env:
+          CADILLAC_BUILD_PYTHON: python
+        run: ./scripts/build_macos_packager_runtime.sh ${{ matrix.arch }} dist
+
+      - name: Upload packager runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: packager-runtime-macos-${{ matrix.arch }}
+          path: dist/cadillac_wallpaper_packager_${{ matrix.arch }}.tar.gz
+
   macos-release:
     name: macOS Universal release
+    needs: macos-runtime
     runs-on: macos-14
 
     steps:
@@ -37,7 +76,14 @@ jobs:
       - name: Build macOS app
         run: flutter build macos --release
 
-      - name: Verify macOS architecture
+      - name: Download both packager runtimes
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packager-runtime-macos-*
+          merge-multiple: true
+          path: runtime-artifacts
+
+      - name: Package and verify macOS app
         run: |
           shopt -s nullglob
           APPS=(build/macos/Build/Products/Release/*.app)
@@ -46,24 +92,8 @@ jobs:
             printf '%s\n' "${APPS[@]}"
             exit 1
           fi
-          APP_PATH="${APPS[0]}"
-          BINARIES=("$APP_PATH"/Contents/MacOS/*)
-          if [ "${#BINARIES[@]}" -lt 1 ]; then
-            echo "No executable found in $APP_PATH/Contents/MacOS"
-            exit 1
-          fi
-          APP_BINARY="${BINARIES[0]}"
-          ARCH_INFO="$(lipo -info "$APP_BINARY")"
-          echo "$ARCH_INFO"
-          echo "$ARCH_INFO" | grep "x86_64"
-          echo "$ARCH_INFO" | grep "arm64"
-          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
-
-      - name: Zip macOS app
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent \
-            "$APP_PATH" \
-            CadillacPackager-macos-universal.zip
+          ./scripts/package_macos_release.sh \
+            "${APPS[0]}" runtime-artifacts CadillacPackager-macos-universal.zip
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -89,6 +119,12 @@ jobs:
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
 
+      - name: Setup Python for packager runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          architecture: x64
+
       - name: Build Windows release package
         shell: pwsh
         run: ./scripts/build_windows_release.ps1 -OutputDir dist
@@ -110,6 +146,10 @@ jobs:
           $required = @(
             "cadillac_wallpaper_desktop.exe",
             "packager_runtime/cadillac_wallpaper_packager.exe",
+            "packager_runtime/third_party_licenses/Python-LICENSE.txt",
+            "packager_runtime/third_party_licenses/Pillow-LICENSE.txt",
+            "packager_runtime/third_party_licenses/PyInstaller-COPYING.txt",
+            "packager_runtime/third_party_licenses/RUNTIME-NOTICE.txt",
             "data/flutter_assets/packager/tools/windows/astcenc.exe",
             "data/flutter_assets/packager/templates/BFA3A0F4596C4C57A6BCDC1EB3348932.zip"
           )

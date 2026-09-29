@@ -8,12 +8,14 @@ void main() {
       'packager/cadillac_wallpaper_packager.py',
     ).readAsString();
 
-    expect(script, contains('progress("step 1/9 validate inputs")'));
+    expect(
+        script, contains('progress("step 1/9 validate inputs and template")'));
     expect(script, contains('progress("step 3/9 derive external PNGs")'));
     expect(script, contains('progress("step 5/9 encode KZB ASTC records")'));
     expect(
       script,
-      contains('progress("step 8/9 decode verify KZB/VCD stitch")'),
+      contains(
+          'progress("step 8/9 verify final ZIP, PNG, and KZB invariants")'),
     );
     expect(script, contains('[cadillac-packager] {redact_text(message)}'));
     expect(script, contains('flush=True'));

@@ -40,8 +40,7 @@ class PackageReportSummary {
         _zipIntegrity(report),
         _pngDimensionsAndAlpha(report),
         _previewAlphaTemplate(report),
-        _kzbSize(report),
-        _kzbRecordOffsets(report),
+        _kzbStructure(report),
         _kzbRec0Preserved(report),
         _auxTransparentRgb(report),
         _kzbVcdStitchMae(report, maxStitchMae),
@@ -54,9 +53,11 @@ class PackageReportSummary {
       'zip': checkById('zip_integrity').passed,
       'pngAlpha': checkById('png_dimensions_alpha').passed &&
           checkById('preview_alpha_template').passed,
-      'kzbOffsets': checkById('kzb_size').passed &&
-          checkById('kzb_record_offsets').passed &&
+      // Retain the v1 manifest key for existing .cwtheme consumers. A rebuilt
+      // KZB may legitimately have different offsets when its identity grows.
+      'kzbOffsets': checkById('kzb_structure').passed &&
           checkById('kzb_rec0_preserved').passed,
+      'kzbStructure': checkById('kzb_structure').passed,
       'auxTransparentRgbZero': checkById('aux_transparent_rgb').passed,
       'kzbVcdStitch': checkById('kzb_vcd_stitch_mae').passed,
     };
@@ -65,15 +66,19 @@ class PackageReportSummary {
 
 ReportCheck _zipIntegrity(Map<String, dynamic> report) {
   final badFile = report['zip_test_bad_file'];
-  final orderSame = report['zip_names_identical_order'] == true;
-  final passed = badFile == null && orderSame;
+  final structureValid = report.containsKey('zip_structure_valid')
+      ? report['zip_structure_valid'] == true
+      : report['zip_names_identical_order'] == true;
+  final passed = badFile == null && structureValid;
   return ReportCheck(
     id: 'zip_integrity',
     label: 'ZIP 完整性',
     passed: passed,
     detail: passed
-        ? 'zip test 通过，条目顺序未改变'
-        : 'bad_file=${badFile ?? 'none'}, names_identical_order=$orderSame',
+        ? report.containsKey('zip_structure_valid')
+            ? 'zip test 与壁纸结构校验通过'
+            : 'zip test 通过，旧版条目顺序未改变'
+        : 'bad_file=${badFile ?? 'none'}, structure_valid=$structureValid',
   );
 }
 
@@ -142,27 +147,32 @@ ReportCheck _previewAlphaTemplate(Map<String, dynamic> report) {
   );
 }
 
-ReportCheck _kzbSize(Map<String, dynamic> report) {
+ReportCheck _kzbStructure(Map<String, dynamic> report) {
   final kzb = _map(report['kzb']);
+  if (kzb.containsKey('identity_rebuild_consistent')) {
+    final passed = kzb['identity_rebuild_consistent'] == true;
+    return ReportCheck(
+      id: 'kzb_structure',
+      label: 'KZB 身份与引用一致性',
+      passed: passed,
+      detail: passed ? '变长身份重建与内部引用校验通过' : '身份重建校验失败或缺少结果',
+    );
+  }
+
+  // Older reports described an in-place payload patch. Its size and record
+  // offsets had to stay fixed; preserve that interpretation for saved themes.
   final sourceSize = kzb['source_kzb_size'];
   final patchedSize = kzb['patched_kzb_size'];
-  final passed = sourceSize != null && sourceSize == patchedSize;
+  final offsets = _boolList(kzb['record_offsets_same']);
+  final passed = sourceSize != null &&
+      sourceSize == patchedSize &&
+      offsets.isNotEmpty &&
+      offsets.every((value) => value);
   return ReportCheck(
-    id: 'kzb_size',
-    label: 'KZB size 不变',
+    id: 'kzb_structure',
+    label: '旧版 KZB 定长结构',
     passed: passed,
-    detail: 'source=$sourceSize, patched=$patchedSize',
-  );
-}
-
-ReportCheck _kzbRecordOffsets(Map<String, dynamic> report) {
-  final values = _boolList(_map(report['kzb'])['record_offsets_same']);
-  final passed = values.isNotEmpty && values.every((value) => value);
-  return ReportCheck(
-    id: 'kzb_record_offsets',
-    label: 'KZB record offset 不变',
-    passed: passed,
-    detail: values.isEmpty ? 'report 缺少 offsets' : values.toString(),
+    detail: 'source=$sourceSize, patched=$patchedSize, offsets=$offsets',
   );
 }
 

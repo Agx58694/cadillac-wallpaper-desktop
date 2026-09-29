@@ -113,6 +113,8 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
   String? _lastOutputFolderPath;
   List<ThemeLibraryEntry> _themes = const <ThemeLibraryEntry>[];
   bool _running = false;
+  bool _cliRunning = false;
+  bool _cancelRequested = false;
 
   static const _pngType = XTypeGroup(
     label: 'PNG',
@@ -159,6 +161,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
   }
 
   Future<void> _selectImage({required bool isLight}) async {
+    if (_running) return;
     final file = await openFile(
       acceptedTypeGroups: const <XTypeGroup>[_pngType],
       confirmButtonText: '选择',
@@ -174,6 +177,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
     required bool isLight,
     required List<String> paths,
   }) async {
+    if (_running) return;
     final droppedPaths = paths.where((path) => path.trim().isNotEmpty).toList();
     final pngPath = droppedPaths.cast<String?>().firstWhere(
           (path) => p.extension(path!).toLowerCase() == '.png',
@@ -194,6 +198,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
     required bool isLight,
     required String path,
   }) async {
+    if (_running) return;
     if (p.extension(path).toLowerCase() != '.png') {
       _appendLog('图片添加失败: 只支持 PNG 文件 (${p.basename(path)})');
       return;
@@ -201,6 +206,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
 
     try {
       final probe = await _imageProbeService.inspect(path);
+      if (_running || !mounted) return;
       setState(() {
         if (isLight) {
           _lightImagePath = path;
@@ -216,8 +222,14 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         '已添加$label图片: ${p.basename(path)} '
         '($sizeLabel, alpha ${probe.alphaMin}-${probe.alphaMax})',
       );
-      if (!probe.isRequiredPreviewSize) {
-        _appendLog('$label图片尺寸不是 2198x367，开始打包前需要更换');
+      if (!probe.isSupportedSize) {
+        _appendLog('$label图片尺寸不支持；请选择原生 8960x1320 或兼容 2198x367');
+      } else if (!probe.isValidForBuild) {
+        _appendLog('$label原生母图含透明像素；请提供完整不透明的 8960x1320 PNG');
+      } else {
+        _appendLog(probe.sourceMode == WallpaperSourceMode.native
+            ? '$label使用原生画布 8960x1320'
+            : '$label使用旧版预览母图 2198x367，细节会被放大');
       }
     } on Object catch (error) {
       _appendLog('图片读取失败: $error');
@@ -225,6 +237,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
   }
 
   Future<void> _selectOutputZip() async {
+    if (_running) return;
     final location = await getSaveLocation(
       acceptedTypeGroups: const <XTypeGroup>[_zipType],
       suggestedName: 'cadillac_ota_wallpaper.zip',
@@ -233,6 +246,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
     if (location == null) {
       return;
     }
+    if (_running || !mounted) return;
     final path = location.path.toLowerCase().endsWith('.zip')
         ? location.path
         : '${location.path}.zip';
@@ -250,6 +264,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
 
     setState(() {
       _running = true;
+      _cancelRequested = false;
       _lastResult = null;
       _lastPackagePath = null;
       _lastOutputFolderPath = null;
@@ -264,6 +279,10 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         '步骤 1/6 校验输入: 白天 ${p.basename(_lightImagePath!)}，'
         '黑夜 ${p.basename(_darkImagePath!)}',
       );
+      final sourceMode = _lightProbe!.sourceMode!;
+      _appendLog(sourceMode == WallpaperSourceMode.native
+          ? '输入模式: 原生 8960x1320'
+          : '输入模式: 旧版 2198x367 兼容');
       final paths = _resolveBuildPaths(now);
       _appendLog('步骤 2/6 准备输出目录: ${p.dirname(paths.outputZipPath)}');
       final buildResources = await _resolveBuildResources();
@@ -279,7 +298,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
       _appendLog(
         envInputZipPath == null
             ? '未设置 CADILLAC_INPUT_ZIP，使用内置足球模板'
-            : '使用 CADILLAC_INPUT_ZIP 指定的模板',
+            : '使用 CADILLAC_INPUT_ZIP 指定的模板；仅支持经审计的静态结构',
       );
       _appendResourceLog('模板 zip', inputZipPath);
       _appendResourceLog('astcenc', astcencPath);
@@ -292,6 +311,7 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
       _appendLog(
         '步骤 4/6 调用打包 Runtime: ${_packagerService.runtimeDescription}',
       );
+      setState(() => _cliRunning = true);
       progressTimer = Timer.periodic(const Duration(seconds: 15), (_) {
         _appendLog(
           'CLI 仍在运行 ${stopwatch.elapsed.inSeconds}s，'
@@ -309,9 +329,17 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
           astcencPath: astcencPath,
           lightDimMaskPath: lightDimMaskPath,
           darkDimMaskPath: darkDimMaskPath,
+          sourceMode: sourceMode,
+          themeKey: safeThemeKey(_mode == PackageMode.androidTheme
+              ? _themeNameController.text.trim()
+              : p.basenameWithoutExtension(paths.outputZipPath)),
         ),
         onCliOutput: _appendCliOutput,
       );
+      setState(() => _cliRunning = false);
+      if (_cancelRequested) {
+        throw const PackagerException('已取消打包');
+      }
       progressTimer.cancel();
       progressTimer = null;
       _appendLog('步骤 5/6 读取 report.json 并生成校验报告');
@@ -339,15 +367,23 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
       _appendLog('输出文件夹: $outputFolderPath');
       _appendLog('总耗时: ${stopwatch.elapsed.inSeconds}s');
     } on Object catch (error) {
-      _appendLog('打包失败: $error');
+      _appendLog(_cancelRequested ? '打包已取消' : '打包失败: $error');
     } finally {
       progressTimer?.cancel();
       if (mounted) {
         setState(() {
           _running = false;
+          _cliRunning = false;
         });
       }
     }
+  }
+
+  void _cancelPackaging() {
+    if (!_cliRunning || _cancelRequested) return;
+    setState(() => _cancelRequested = true);
+    _appendLog('正在取消打包…');
+    unawaited(_packagerService.cancelActiveBuild());
   }
 
   Future<ThemeLibraryEntry> _saveThemePackage(
@@ -368,16 +404,6 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         createdAt: createdAt,
         lightMasterPath: _lightImagePath!,
         darkMasterPath: _darkImagePath!,
-        lightPreviewPath: p.join(
-          result.workDirPath,
-          'derived_png',
-          'light_preview_image.png',
-        ),
-        darkPreviewPath: p.join(
-          result.workDirPath,
-          'derived_png',
-          'dark_preview_image.png',
-        ),
         otaZipPath: result.outputZipPath,
         reportPath: result.reportPath,
         reportSummary: result.reportSummary,
@@ -469,9 +495,14 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
     if (_lightImagePath == null || _darkImagePath == null) {
       return '需要选择白天和黑夜两张 PNG';
     }
-    if (_lightProbe?.isRequiredPreviewSize != true ||
-        _darkProbe?.isRequiredPreviewSize != true) {
-      return '两张输入图必须都是 2198x367';
+    if (_lightProbe?.sourceMode == null || _darkProbe?.sourceMode == null) {
+      return '两张输入图必须都是 8960x1320 或 2198x367';
+    }
+    if (_lightProbe!.sourceMode != _darkProbe!.sourceMode) {
+      return '白天和黑夜必须使用相同尺寸与输入模式';
+    }
+    if (!_lightProbe!.isValidForBuild || !_darkProbe!.isValidForBuild) {
+      return '原生 8960x1320 日夜母图必须完整不透明';
     }
     if (_mode == PackageMode.standardOta &&
         _outputZipController.text.trim().isEmpty) {
@@ -592,7 +623,9 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
                     notesController: _notesController,
                     libraryRootPath: _libraryRootPath,
                     running: _running,
-                    onModeChanged: (mode) => setState(() => _mode = mode),
+                    onModeChanged: (mode) {
+                      if (!_running) setState(() => _mode = mode);
+                    },
                     onPickLight: () => _selectImage(isLight: true),
                     onPickDark: () => _selectImage(isLight: false),
                     onDropLight: (paths) =>
@@ -601,6 +634,9 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
                         _dropImage(isLight: false, paths: paths),
                     onPickOutput: _selectOutputZip,
                     onRun: _running ? null : _runPackaging,
+                    onCancel: _cliRunning && !_cancelRequested
+                        ? _cancelPackaging
+                        : null,
                   );
                   final workbench = _Workbench(
                     mode: _mode,
@@ -739,6 +775,7 @@ class _Sidebar extends StatelessWidget {
     required this.onDropDark,
     required this.onPickOutput,
     required this.onRun,
+    required this.onCancel,
   });
 
   final PackageMode mode;
@@ -759,6 +796,7 @@ class _Sidebar extends StatelessWidget {
   final Future<void> Function(List<String> paths) onDropDark;
   final VoidCallback onPickOutput;
   final VoidCallback? onRun;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -779,7 +817,7 @@ class _Sidebar extends StatelessWidget {
             const _SectionLabel(
               icon: CupertinoIcons.photo,
               title: '输入图片',
-              trailing: '2198x367',
+              trailing: '8960×1320 / 2198×367',
             ),
             const SizedBox(height: 10),
             _ImageInputTile(
@@ -809,9 +847,10 @@ class _Sidebar extends StatelessWidget {
                 authorController: authorController,
                 notesController: notesController,
                 libraryRootPath: libraryRootPath,
+                enabled: !running,
               ),
             const SizedBox(height: 22),
-            _RunButton(running: running, onRun: onRun),
+            _RunButton(running: running, onRun: onRun, onCancel: onCancel),
           ],
         ),
       ),
@@ -926,11 +965,16 @@ class _SectionLabel extends StatelessWidget {
           ),
         ),
         if (trailing != null)
-          Text(
-            trailing!,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: _AppColors.tertiaryText,
-                ),
+          Flexible(
+            child: Text(
+              trailing!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: _AppColors.tertiaryText,
+                  ),
+            ),
           ),
       ],
     );
@@ -961,7 +1005,7 @@ class _ImageInputTileState extends State<_ImageInputTile> {
 
   @override
   Widget build(BuildContext context) {
-    final valid = widget.probe?.isRequiredPreviewSize == true;
+    final valid = widget.probe?.isValidForBuild == true;
     final imageProbe = widget.probe;
     final statusColor = valid ? _AppColors.success : _AppColors.warning;
     return DropTarget(
@@ -1106,12 +1150,14 @@ class _ThemeFields extends StatelessWidget {
     required this.authorController,
     required this.notesController,
     required this.libraryRootPath,
+    required this.enabled,
   });
 
   final TextEditingController themeNameController;
   final TextEditingController authorController;
   final TextEditingController notesController;
   final String? libraryRootPath;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1125,16 +1171,19 @@ class _ThemeFields extends StatelessWidget {
         const SizedBox(height: 10),
         TextField(
           controller: themeNameController,
+          enabled: enabled,
           decoration: const InputDecoration(labelText: '主题名称'),
         ),
         const SizedBox(height: 10),
         TextField(
           controller: authorController,
+          enabled: enabled,
           decoration: const InputDecoration(labelText: '作者'),
         ),
         const SizedBox(height: 10),
         TextField(
           controller: notesController,
+          enabled: enabled,
           minLines: 2,
           maxLines: 4,
           decoration: const InputDecoration(labelText: '备注'),
@@ -1156,35 +1205,53 @@ class _ThemeFields extends StatelessWidget {
 }
 
 class _RunButton extends StatelessWidget {
-  const _RunButton({required this.running, required this.onRun});
+  const _RunButton({
+    required this.running,
+    required this.onRun,
+    required this.onCancel,
+  });
 
   final bool running;
   final VoidCallback? onRun;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: FilledButton.icon(
-        onPressed: onRun,
-        icon: running
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(CupertinoIcons.play_fill, size: 18),
-        label: Text(running ? '打包中' : '开始打包'),
-        style: FilledButton.styleFrom(
-          backgroundColor: _AppColors.accent,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
+            onPressed: onRun,
+            icon: running
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(CupertinoIcons.play_fill, size: 18),
+            label: Text(running ? '打包中' : '开始打包'),
+            style: FilledButton.styleFrom(
+              backgroundColor: _AppColors.accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
         ),
-      ),
+        if (onCancel != null) ...<Widget>[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onCancel,
+            icon: const Icon(CupertinoIcons.stop_circle),
+            label: const Text('取消打包'),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1598,7 +1665,7 @@ class _PreviewStrip extends StatelessWidget {
                     size: 22,
                   ),
                 )
-              : Image.file(File(path!), fit: BoxFit.cover),
+              : Image.file(File(path!), fit: BoxFit.contain),
         ),
       ),
     );

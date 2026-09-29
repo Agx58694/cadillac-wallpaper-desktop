@@ -8,8 +8,6 @@ class ThemePackageRequest {
     required this.createdAt,
     required this.lightMasterPath,
     required this.darkMasterPath,
-    required this.lightPreviewPath,
-    required this.darkPreviewPath,
     required this.otaZipPath,
     required this.reportPath,
     required this.reportSummary,
@@ -22,8 +20,6 @@ class ThemePackageRequest {
   final DateTime createdAt;
   final String lightMasterPath;
   final String darkMasterPath;
-  final String lightPreviewPath;
-  final String darkPreviewPath;
   final String otaZipPath;
   final String reportPath;
   final PackageReportSummary reportSummary;

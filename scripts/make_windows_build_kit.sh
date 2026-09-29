@@ -11,6 +11,8 @@ rm -f "$ZIP_PATH"
 required_files=(
   "packager/tools/windows/astcenc.exe"
   "scripts/build_windows_release.ps1"
+  "scripts/copy_packager_runtime_licenses.py"
+  "scripts/packager_runtime_requirements.txt"
   "scripts/setup_and_build_windows.ps1"
   "build_windows_one_click.cmd"
   "WINDOWS_BUILD_README.txt"

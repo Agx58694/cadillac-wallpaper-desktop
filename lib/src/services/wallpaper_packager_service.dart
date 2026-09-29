@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -42,7 +43,7 @@ class WallpaperPackagerService {
                 : _defaultPythonExecutable()),
         packagerScript = packagerScript ?? defaultPackagerScript(),
         packagerExecutable = packagerExecutable ?? _defaultPackagerExecutable(),
-        _processRunner = processRunner ?? _runProcess,
+        _processRunner = processRunner,
         _validatePythonDependencies =
             validatePythonDependencies ?? processRunner == null,
         _pythonDependencyChecker =
@@ -51,9 +52,39 @@ class WallpaperPackagerService {
   final String pythonExecutable;
   final String packagerScript;
   final String? packagerExecutable;
-  final ProcessRunner _processRunner;
+  final ProcessRunner? _processRunner;
   final bool _validatePythonDependencies;
   final PythonDependencyChecker _pythonDependencyChecker;
+  Process? _activeProcess;
+  bool _cancelRequested = false;
+
+  Future<void> cancelActiveBuild() async {
+    _cancelRequested = true;
+    final process = _activeProcess;
+    if (process == null) return;
+    if (Platform.isWindows) {
+      try {
+        final result = await Process.run('taskkill', <String>[
+          '/PID',
+          '${process.pid}',
+          '/T',
+          '/F',
+        ]);
+        if (result.exitCode != 0) process.kill();
+      } on Object {
+        process.kill();
+      }
+    } else {
+      // The Python CLI can be waiting on astcenc; stop that child first so its
+      // inherited output pipes do not keep the cancelled build alive.
+      try {
+        await Process.run('pkill', <String>['-TERM', '-P', '${process.pid}']);
+      } on Object {
+        // The parent still needs to be stopped when pkill is unavailable.
+      }
+      process.kill();
+    }
+  }
 
   String get runtimeDescription {
     if (packagerExecutable?.isNotEmpty == true) {
@@ -66,13 +97,6 @@ class WallpaperPackagerService {
     final envPath = Platform.environment['CADILLAC_PACKAGER_SCRIPT'];
     if (envPath != null && envPath.isNotEmpty) {
       return envPath;
-    }
-
-    final fromProjectParent = p.normalize(
-      p.join(Directory.current.path, '..', 'cadillac_wallpaper_packager.py'),
-    );
-    if (File(fromProjectParent).existsSync()) {
-      return fromProjectParent;
     }
 
     final fromProjectPackager = p.normalize(
@@ -106,6 +130,7 @@ class WallpaperPackagerService {
     PackageBuildRequest request, {
     CliOutputSink? onCliOutput,
   }) async {
+    _cancelRequested = false;
     final usesPackagerExecutable = packagerExecutable?.isNotEmpty == true;
     if (!usesPackagerExecutable &&
         _validatePythonDependencies &&
@@ -124,19 +149,43 @@ class WallpaperPackagerService {
 
     final ProcessResult result;
     try {
-      result = await _processRunner(
+      final runner = _processRunner ??
+          (String command, List<String> arguments, String? directory,
+                  {CliOutputSink? onOutput}) =>
+              _runProcess(
+                command,
+                arguments,
+                directory,
+                onOutput: onOutput,
+                onStarted: (process) {
+                  _activeProcess = process;
+                  if (_cancelRequested) unawaited(cancelActiveBuild());
+                },
+                onFinished: (process) {
+                  if (identical(_activeProcess, process)) {
+                    _activeProcess = null;
+                  }
+                },
+              );
+      result = await runner(
         command,
         arguments,
         workingDirectory,
         onOutput: onCliOutput,
       );
     } on Object catch (error) {
+      if (_cancelRequested) {
+        throw const PackagerException('已取消打包');
+      }
       throw PackagerException(redactSensitivePaths(
         '无法启动打包 CLI\n'
         'command: $command\n'
         'workingDirectory: $workingDirectory\n'
         'error: $error',
       ));
+    }
+    if (_cancelRequested) {
+      throw const PackagerException('已取消打包');
     }
     if (result.exitCode != 0) {
       final combinedOutput = '${result.stdout}\n${result.stderr}';
@@ -293,6 +342,8 @@ Future<ProcessResult> _runProcess(
   List<String> arguments,
   String? workingDirectory, {
   CliOutputSink? onOutput,
+  void Function(Process process)? onStarted,
+  void Function(Process process)? onFinished,
 }) async {
   final process = await Process.start(
     command,
@@ -300,6 +351,7 @@ Future<ProcessResult> _runProcess(
     workingDirectory: workingDirectory,
     runInShell: Platform.isWindows,
   );
+  onStarted?.call(process);
   final stdoutBuffer = StringBuffer();
   final stderrBuffer = StringBuffer();
 
@@ -331,6 +383,7 @@ Future<ProcessResult> _runProcess(
   );
   final exitCode = await process.exitCode;
   await Future.wait(<Future<void>>[stdoutFuture, stderrFuture]);
+  onFinished?.call(process);
 
   return ProcessResult(
     process.pid,

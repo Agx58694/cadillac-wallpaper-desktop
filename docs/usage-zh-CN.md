@@ -1,184 +1,107 @@
-# 使用说明
+# 从电脑打包到车机应用
 
-Cadillac Wallpaper Desktop 是一个桌面打包工具，用两张 `2198x367` PNG 主图生成 Cadillac 兼容的 OTA 壁纸包，或生成可供 Android 联动安装器使用的 `.cwtheme` 主题包。
+本文描述两张**静态白天/黑夜图片**的完整流程：电脑端出包，车机“壁纸空间”导入并请求应用。适用性取决于车机车型、OTA 版本和原厂服务；应用显示“成功”以本次系统回调为准。
 
-## 下载哪个版本
+## 1. 选对程序
 
-从 [GitHub 最新 Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest) 下载对应系统的 zip：
+下载 v1.1.0 对应附件；桌面 ZIP 解压后运行：
 
-| 系统 | 下载文件 |
+| 设备 | 下载文件 |
 | --- | --- |
-| macOS Apple Silicon / M 系列 | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
-| macOS Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
-| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-windows-x64.zip) |
+| macOS 12+ Apple Silicon / Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-macos-universal.zip) |
+| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-windows-x64.zip) |
+| Android 12+ 车机 | [wallpaper-studio-0.2.1-test.apk](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/wallpaper-studio-0.2.1-test.apk) |
 
-Release 页面里会同时出现 `Source code (zip)` 和 `Source code (tar.gz)`。这两个是源码包，不是可直接运行的桌面程序；普通用户请下载上表中的 `CadillacPackager-*.zip`。
+这些链接在 v1.1.0 Release 发布后生效；GitHub 自动提供的 `Source code` 是源码，不能直接运行。
 
-解压后直接运行应用。macOS 如果提示来自未认证开发者，可以右键应用选择“打开”；如果仍被阻止，可在终端执行：
+v1.1.0 macOS 分发包内含 x86_64 和 arm64 两套 Python/Pillow 打包运行时以及双架构 `astcenc`；Windows x64 分发包内含独立打包运行时和 `astcenc.exe`，正常打包不需另装 Python/Pillow。仅从源码执行 `flutter build macos --release` 不会自动加入打包运行时。
 
-```bash
-xattr -dr com.apple.quarantine "/path/to/Cadillac Packager.app"
-```
+“壁纸空间”的包名是 `com.cadillac.wallpaperstudio`。0.2.1 是**调试签名的验证 APK**，和该应用 0.1.0 / 0.2.0 使用相同签名、可覆盖升级。旧 `com.cadillac.themeinstaller` 是另一个应用，固定写入足球模板目录，不适合本次生成的独立身份包。0.2.1 APK 自带“雨夜球场 V12”示例，首次启动仅导入示例，不自动应用。
 
-## 运行前准备
+## 2. 准备日夜母图
 
-应用需要以下输入：
+推荐使用两张同构图、不透明的 **8960×1320 PNG**。左侧 5010×1320 对应 IPD，右侧 3950×1320 对应 VCD，两侧接缝在 x=5010。日夜画面应保持主体位置和地平线一致，并按目标车机 OTA 的仪表、卡片、工具栏遮挡检查构图。
 
-- 白天主图：PNG，尺寸必须是 `2198x367`。
-- 黑夜主图：PNG，尺寸必须是 `2198x367`。
-- macOS 版本需要 Python 3 和 Pillow。
-- Windows x64 release 已内置独立打包 Runtime，通常不需要额外安装 Python/Pillow。
+也可继续使用两张 **2198×367 PNG** 进入旧预览兼容模式。程序会从较小预览图裁切、放大并生成所需原生资源，因此无法恢复原图没有的细节，也不保证大屏主体位置等同于原生母图。日夜尺寸必须一致；其他尺寸会被拒绝。不要把其他比例的图片硬拉成 8960×1320。
 
-应用已经内置当前支持的足球模板，正常下载 release 后不需要额外配置模板 zip。
+本次只处理静态白天/黑夜两态。静态入口只接受经审计的 `football-static` 模板结构，保留其原有状态和遮罩；动态模板会被拒绝。程序不会替新图自动设计或适配雪花、落叶等专属动画，也不生成四态、右屏视频、天气/时间联动。
 
-> 当前版本只适配足球模板这一款。其他官方主题模板结构不同，后续版本再逐步适配。
+## 3. 在电脑端打包
 
-macOS 安装 Pillow：
+### 标准 OTA ZIP
 
-```bash
-python3 -m pip install Pillow
-```
+1. 打开程序，选择“标准 OTA”。
+2. 拖入或选择白天 PNG 与黑夜 PNG。程序按尺寸识别原生或旧预览模式。
+3. 选择输出位置，点击“开始打包”。
+4. 等待最终 ZIP、报告和界面校验全部完成，点击“打开文件夹”。
 
-如果使用 Windows 源码构建包，或者手动指定外部 Python 脚本，Windows 也可以使用：
-
-```powershell
-py -m pip install Pillow
-```
-
-## 可选：覆盖模板 zip
-
-默认会使用内置足球模板。只有在需要测试兼容模板时，才通过环境变量覆盖：
-
-```bash
-CADILLAC_INPUT_ZIP=/path/to/template.zip
-```
-
-macOS 双击打开的应用不一定继承 shell 环境变量。如果要覆盖模板，推荐用终端启动：
-
-```bash
-export CADILLAC_INPUT_ZIP="/path/to/template.zip"
-export CADILLAC_PYTHON="$(command -v python3)"
-"/Applications/Cadillac Packager.app/Contents/MacOS/cadillac_wallpaper_desktop"
-```
-
-如果应用还在下载目录，可以把最后一行换成对应 `.app` 内的可执行文件路径。
-
-Windows 临时启动：
-
-```powershell
-$env:CADILLAC_INPUT_ZIP="C:\path\to\template.zip"
-.\cadillac_wallpaper_desktop.exe
-```
-
-Windows 持久配置：
-
-```powershell
-setx CADILLAC_INPUT_ZIP "C:\path\to\template.zip"
-```
-
-执行 `setx` 后需要重新打开终端或重新启动应用。
-
-可选环境变量：
-
-| 变量 | 用途 |
-| --- | --- |
-| `CADILLAC_PYTHON` | 指定带 Pillow 的 Python 可执行文件 |
-| `CADILLAC_PACKAGER_SCRIPT` | 指定外部 `cadillac_wallpaper_packager.py` |
-| `CADILLAC_ASTCENC` | 指定外部 `astcenc` / `astcenc.exe` |
-| `CADILLAC_LIGHT_DIM_MASK` | 指定白天 dim mask |
-| `CADILLAC_DARK_DIM_MASK` | 指定黑夜 dim mask |
-
-## 标准 OTA 打包
-
-1. 选择“标准 OTA”。
-2. 拖入或选择白天 `2198x367` PNG。
-3. 拖入或选择黑夜 `2198x367` PNG。
-4. 选择 OTA zip 输出位置。
-5. 点击“开始打包”。
-6. 打包完成后查看校验结果，并使用“打开文件夹”进入输出目录。
-
-标准 OTA 模式会输出：
-
-- `ota_wallpaper.zip`
-- `report.json` 或 `package-report.json`
-
-这个模式适合即用即丢，不会强制保存历史记录。
-
-## Android 联动主题包
-
-1. 选择“主题包”。
-2. 拖入或选择白天 `2198x367` PNG。
-3. 拖入或选择黑夜 `2198x367` PNG。
-4. 填写主题名称、作者和备注。
-5. 点击“开始打包”。
-6. 打包完成后使用“打开文件夹”进入主题包目录。
-
-主题包模式会输出 `.cwtheme`，并保存到桌面端本地主题库。下次打开软件仍能看到历史主题、预览和校验状态，除非在软件里主动删除。
-
-`.cwtheme` 内部结构：
+标准模式输出 `ota_wallpaper.zip` 及旁边的 `package-report.json`；报告不在 OTA ZIP 内。ZIP 内仅有一套壁纸的 9 个文件：两张 2198×367 preview、四张 3950×1320 VCD/dim、两张 1920×1080 RID，以及一个 KZB。路径形如：
 
 ```text
-cwtheme/
-  manifest.json
-  previews/light_preview_2198x367.png
-  previews/dark_preview_2198x367.png
-  previews/thumbnail_light.png
-  previews/thumbnail_dark.png
-  masters/light_master_2198x367.png
-  masters/dark_master_2198x367.png
-  payload/ota_wallpaper.zip
-  report/package-report.json
+<32位十六进制ID>/cadi_wallpaper.../
+  light_preview_image.png
+  dark_preview_image.png
+  light_dim_background.png
+  dark_dim_background.png
+  vcd/wallpaper/light_wallpaper_vcd.png
+  vcd/wallpaper/dark_wallpaper_vcd.png
+  rid/screenSaver/light_screenSaver_rid.png
+  rid/screenSaver/dark_screenSaver_rid.png
+  ipd/wallpaper/<项目身份>.kzb
 ```
 
-## 校验结果说明
+每个内容版本有独立的 KZB 内部项目与资源地址，以及对应的外层目录。再次打包相同内容和主题标识时身份稳定，内容改变会换身份。最终 ZIP 会校验目录和路径安全、9 文件、PNG 尺寸与 alpha、`rec0`、辅助贴图透明区 RGB、内部引用、日夜资源与左右拼接。身份重建后 KZB 大小和记录偏移可以变化；以结构化重建和引用一致性为准。
 
-应用不会只显示“成功”。打包完成后会读取 report 并展示关键校验：
+### `.cwtheme` 主题包
 
-- zip 完整性。
-- PNG 尺寸和 alpha。
-- preview alpha 是否复用模板。
-- KZB size 是否不变。
-- KZB record offset 是否不变。
-- `rec0` 是否保持。
-- `rec1`、`rec2`、`rec4`、`rec5` 中 alpha 为 0 的 RGB 是否为 `[0,0,0]`。
-- KZB/VCD 拼接 MAE。
+选择“主题包”，用相同的两张 PNG 填写主题名称等信息后打包。这个模式调用同一 OTA 核心，随后把成品放进 `cwtheme/payload/ota_wallpaper.zip`，附上清单、2198×367 预览、缩略图、原始母图和报告，并保存到桌面主题库。原生母图在包内为 `masters/light_master_8960x1320.png` / `masters/dark_master_8960x1320.png`；旧预览模式则对应 `2198x367`。清单安装路径来自实际 OTA 成品，仍使用 schema v1。
 
-如果任一关键校验失败，不建议继续使用该产物。
+## 4. 在车机导入并应用
 
-## 常见问题
+1. 把电脑生成的 OTA ZIP 或 `.cwtheme` 放到车机文件选择器可访问的位置。
+2. 打开“壁纸空间”，点“导入壁纸”，通过系统文件选择器选择文件。程序会检查路径、大小、必需资源、PNG 尺寸和 KZB 标识；不通过就不要应用。
+3. 选择刚导入的壁纸，分别查看白天、黑夜预览。重复导入相同内容会选中现有条目。
+4. 点“应用壁纸”。程序准备独立目录，向原厂通道传输仪表资源，发布 Android 侧资源，再请求系统切换。
+5. 看到对应本次 ID 的成功回调才算已应用。失败时打开“车机与记录”看步骤；超时代表**结果待确认**，请先观察左右屏，勿仅凭请求已发出就判断成功。
 
-### 提示模板 zip 缺失
+安装器通过系统文件选择器和 MediaStore 工作，不需用户授予“所有文件访问”权限。它不会自动应用首次导入的包。进入壁纸桌面模式的后续请求本身没有确认回调；实车是否已进入该模式还需查看车机。0.2.1 的导入、传输和界面经过本地/模拟器测试，**该版本尚无本线程的实车结果**；先前版本与独立身份对照包有实车 A/B/A 左右屏即时更新反馈，不能推广为所有车型、OTA 或任意新包都免重启。
 
-重新下载包含内置足球模板的 release。也可以设置 `CADILLAC_INPUT_ZIP` 指向兼容模板 zip 后重新启动应用。
+## 5. 常见问题与可选配置
 
-### 提示 Pillow 不可用
+- **提示图片尺寸不符**：两张都导出为 8960×1320 原生 PNG，或都使用 2198×367 旧预览 PNG。不要混用。
+- **提示模板不受支持**：程序只内置已适配的静态足球模板；其他包必须符合已审计的 `football-static` 结构，未知或动态结构会被拒绝。
+- **校验失败**：查看 `package-report.json` 和界面中的具体项目；不要拿未通过的 ZIP 上车。
+- **应用结果待确认**：查看“车机与记录”以及左右屏实际画面，再决定是否重试。
+- **macOS 打不开**：先尝试在 Finder 中右键应用并选择“打开”；v1.1.0 分发包已内置 Python/Pillow 运行时。
+- **运行较慢**：完整 ASTC 编码和解码校验会耗时，界面日志会持续显示进度。
 
-安装 Pillow，或通过 `CADILLAC_PYTHON` 指定已经安装 Pillow 的 Python。
+默认使用随桌面程序附带的足球模板和编码器。需要本地测试兼容模板或工具时可设置：
 
-### 图片尺寸不正确
+| 环境变量 | 用途 |
+| --- | --- |
+| `CADILLAC_INPUT_ZIP` | 覆盖内置模板 ZIP；结构未知会拒绝 |
+| `CADILLAC_ASTCENC` | 覆盖内置 ASTC 编码器 |
+| `CADILLAC_PACKAGER_CLI` | 覆盖内置独立打包 runtime |
+| `CADILLAC_PYTHON`、`CADILLAC_PACKAGER_SCRIPT` | 使用外部 Python 与打包源码 |
+| `CADILLAC_LIGHT_DIM_MASK`、`CADILLAC_DARK_DIM_MASK` | 本地测试 dim mask |
 
-白天和黑夜主图都必须是 `2198x367` PNG。请先在图片编辑工具中裁切或导出为这个尺寸。
+macOS 从 Finder 双击启动的应用未必继承终端环境变量；需要覆盖时从终端启动应用。Windows 可用 PowerShell 的 `$env:变量名="值"` 临时设置环境变量。
 
-### macOS 打不开应用
-
-先尝试右键应用选择“打开”。如果仍然被拦截，移除 quarantine 标记：
+## 6. 开发者验证
 
 ```bash
-xattr -dr com.apple.quarantine "/path/to/Cadillac Packager.app"
+flutter pub get
+flutter analyze
+flutter test
+PYTHONPATH=packager python3 -m unittest discover -s packager/tests -p 'test_*.py'
 ```
 
-### 打包时间较长像卡住
-
-查看界面右侧日志。日志会显示 Python CLI 调用、输入检查、OTA 打包、主题封装、report 读取、输出路径等步骤。
+macOS/Windows release 构建工作流位于 `.github/workflows/desktop-release.yml`，手动触发后上传 Actions artifacts。macOS 合包会验证 Flutter 主程序、Python 启动器、两套架构专属 runtime 与 `astcenc`，并在各自架构机器上运行打包 CLI。Windows 使用 `scripts/build_windows_release.ps1` 制作带独立 Python runtime 的 x64 ZIP。正式 GitHub Release 及附件发布是另一步，不能把 Actions artifact 当作正式发布。
 
 ## 一起完善
 
-这个项目会继续围绕 Cadillac 车机壁纸做一套开源、免费的工具。目前已经有壁纸打包程序；壁纸安装程序也在开发中，但还属于未充分测试的半成品。
-
-我想寻找志同道合的车友一起把这个软件系列完善下去。如果你愿意测试不同车型和系统版本、提出功能与体验建议，或者帮忙做教程、帖子、视频等自媒体传播，欢迎扫码联系。所有后续工具都会保持开源和免费。
+欢迎车友测试不同车型和 OTA 版本、提出体验建议，或帮忙制作教程和视频。本项目坚持开源免费。
 
 <img src="assets/wechat-contact.png" alt="微信联系方式" width="240">
-
-欢迎基于开源精神进行学习、交流、二次开发和提交改进，但抵制任何抄袭开源项目、换壳包装后拿去盈利的行为。这个系列会坚持开源免费，也希望参与者尊重每一份公开分享的劳动。
 
 禁止偷电

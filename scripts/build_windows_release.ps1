@@ -14,14 +14,14 @@ function Test-Command([string]$Command) {
 }
 
 function Set-PythonCommand {
-  if (Test-Command "py") {
-    $script:PythonExe = "py"
-    $script:PythonPrefix = @("-3")
-    return $true
-  }
   if (Test-Command "python") {
     $script:PythonExe = "python"
     $script:PythonPrefix = @()
+    return $true
+  }
+  if (Test-Command "py") {
+    $script:PythonExe = "py"
+    $script:PythonPrefix = @("-3")
     return $true
   }
 
@@ -64,7 +64,7 @@ function Build-PackagerExecutable([string]$ReleaseDir) {
   }
 
   Write-Host "Building standalone packager CLI with $script:PythonExe"
-  Invoke-Python @("-m", "pip", "install", "--upgrade", "pip", "Pillow", "pyinstaller")
+  Invoke-Python @("-m", "pip", "install", "--requirement", "scripts/packager_runtime_requirements.txt")
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to install PyInstaller/Pillow for the standalone packager CLI."
   }
@@ -74,7 +74,7 @@ function Build-PackagerExecutable([string]$ReleaseDir) {
   New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
   New-Item -ItemType Directory -Force -Path $pyinstallerWorkDir | Out-Null
 
-  Invoke-Python @(
+  $pyinstallerArgs = @(
     "-m", "PyInstaller",
     "--noconfirm",
     "--clean",
@@ -83,17 +83,43 @@ function Build-PackagerExecutable([string]$ReleaseDir) {
     "--distpath", $runtimeDir,
     "--workpath", $pyinstallerWorkDir,
     "--specpath", $pyinstallerWorkDir,
-    "--paths", (Join-Path $projectRoot "packager"),
-    "--hidden-import", "kzb_astc_patcher",
-    (Join-Path $projectRoot "packager\cadillac_wallpaper_packager.py")
+    "--paths", (Join-Path $projectRoot "packager")
   )
+  Get-ChildItem (Join-Path $projectRoot "packager") -File -Filter "*.py" | ForEach-Object {
+    if ($_.BaseName -ne "cadillac_wallpaper_packager" -and $_.BaseName -ne "__init__") {
+      $pyinstallerArgs += @("--hidden-import", $_.BaseName)
+    }
+  }
+  $pyinstallerArgs += (Join-Path $projectRoot "packager\cadillac_wallpaper_packager.py")
+  Invoke-Python -Arguments $pyinstallerArgs
   if ($LASTEXITCODE -ne 0) {
     throw "PyInstaller failed building the standalone packager CLI."
+  }
+  Invoke-Python -Arguments @(
+    (Join-Path $projectRoot "scripts\copy_packager_runtime_licenses.py"),
+    (Join-Path $runtimeDir "third_party_licenses")
+  )
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to include Python/Pillow/PyInstaller license texts."
   }
 
   $packagerExePath = Join-Path $runtimeDir "cadillac_wallpaper_packager.exe"
   if (!(Test-Path $packagerExePath)) {
     throw "Missing standalone packager CLI: $packagerExePath"
+  }
+  & $packagerExePath --help | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Standalone packager CLI failed to start: $packagerExePath"
+  }
+  $probePath = Join-Path $pyinstallerWorkDir "runtime-probe-missing-template.zip"
+  $probeOutput = & $packagerExePath `
+    --light-image (Join-Path $pyinstallerWorkDir "runtime-probe-light.png") `
+    --dark-image (Join-Path $pyinstallerWorkDir "runtime-probe-dark.png") `
+    --input-zip $probePath `
+    --output-zip (Join-Path $pyinstallerWorkDir "runtime-probe-unused.zip") `
+    --source-mode native 2>&1 | Out-String
+  if ($LASTEXITCODE -eq 0 -or !$probeOutput.Contains("runtime-probe-missing-template.zip")) {
+    throw "Standalone packager runtime did not reach the expected missing-template boundary. Output: $probeOutput"
   }
 }
 

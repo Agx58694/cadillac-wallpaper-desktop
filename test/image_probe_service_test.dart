@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cadillac_wallpaper_desktop/src/models/package_build_request.dart';
 import 'package:cadillac_wallpaper_desktop/src/services/image_probe_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
@@ -24,6 +25,36 @@ void main() {
     expect(probe.alphaMin, 0);
     expect(probe.alphaMax, 255);
     expect(probe.isRequiredPreviewSize, isTrue);
+    expect(probe.sourceMode, WallpaperSourceMode.legacy);
+  });
+
+  test('recognizes native and legacy sizes without accepting mixed geometry',
+      () {
+    expect(
+        WallpaperSourceMode.fromSize(8960, 1320), WallpaperSourceMode.native);
+    expect(WallpaperSourceMode.fromSize(2198, 367), WallpaperSourceMode.legacy);
+    expect(WallpaperSourceMode.fromSize(8920, 1320), isNull);
+    expect(WallpaperSourceMode.fromSize(8960, 367), isNull);
+    const transparentNative = ImageProbe(
+      path: 'native.png',
+      width: 8960,
+      height: 1320,
+      hasAlpha: true,
+      alphaMin: 0,
+      alphaMax: 255,
+    );
+    expect(transparentNative.isSupportedSize, isTrue);
+    expect(transparentNative.isValidForBuild, isFalse);
+  });
+
+  test('rejects a JPEG renamed with a PNG extension', () async {
+    final tempDir = await Directory.systemTemp.createTemp('image_probe_jpeg_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final file = File(p.join(tempDir.path, 'renamed.png'));
+    await file.writeAsBytes(img.encodeJpg(img.Image(width: 8, height: 8)));
+
+    await expectLater(
+        ImageProbeService().inspect(file.path), throwsFormatException);
   });
 
   test('throws a format exception for unreadable image files', () async {

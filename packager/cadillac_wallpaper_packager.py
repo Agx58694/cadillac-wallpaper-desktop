@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a tested Cadillac OTA wallpaper package from 2198x367 masters."""
+"""Build a Cadillac OTA wallpaper package from native or legacy day/night art."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ import argparse
 import hashlib
 import io
 import json
+import math
+import os
 import re
 import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +25,7 @@ DEFAULT_LIGHT_DIM_MASK = PROJECT_ROOT / "masks/light_dim_alpha_fixed_smoothed_us
 DEFAULT_DARK_DIM_MASK = PROJECT_ROOT / "masks/dark_dim_alpha_fixed_smoothed_used.png"
 
 PREVIEW_SIZE = (2198, 367)
+NATIVE_SIZE = (8960, 1320)
 VCD_SIZE = (3950, 1320)
 RID_SIZE = (1920, 1080)
 PNG_TARGET_SIZES = {
@@ -55,24 +59,68 @@ def redacted_path(path: Path) -> str:
         return redact_text(path)
 
 
+def redact_report_values(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, list):
+        return [redact_report_values(item) for item in value]
+    if isinstance(value, dict):
+        return {key: redact_report_values(item) for key, item in value.items()}
+    return value
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def publish_verified_zip(source: Path, destination: Path) -> None:
+    """Copy to the target filesystem, then create the final name without overwrite."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".ota-",
+                                         suffix=".tmp", delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            with source.open("rb") as original:
+                shutil.copyfileobj(original, temporary, length=1024 * 1024)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        try:
+            os.link(temporary_path, destination)
+        except FileExistsError:
+            if file_sha256(destination) != file_sha256(temporary_path):
+                raise FileExistsError(f"output ZIP already exists with different content: {destination}")
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
 def progress(message: str) -> None:
     print(f"[cadillac-packager] {redact_text(message)}", flush=True)
 
 
 def load_runtime_dependencies() -> None:
-    global Image, ImageChops, ImageFilter, ImageStat, kzb
+    global Image, ImageChops, ImageFilter, ImageOps, ImageStat, kzb, identity
     from PIL import Image as pil_image
     from PIL import ImageChops as pil_image_chops
     from PIL import ImageFilter as pil_image_filter
+    from PIL import ImageOps as pil_image_ops
     from PIL import ImageStat as pil_image_stat
 
     import kzb_astc_patcher as kzb_module
+    import kzb_identity as identity_module
 
     Image = pil_image
     ImageChops = pil_image_chops
     ImageFilter = pil_image_filter
+    ImageOps = pil_image_ops
     ImageStat = pil_image_stat
     kzb = kzb_module
+    identity = identity_module
 
 
 @dataclass(frozen=True)
@@ -127,6 +175,8 @@ def load_preview_master(path: Path, label: str) -> Image.Image:
     if not path.exists():
         raise FileNotFoundError(path)
     with Image.open(path) as image:
+        if image.format != "PNG":
+            raise ValueError(f"{label} image must be PNG")
         source = image.convert("RGBA")
     if source.size != PREVIEW_SIZE:
         raise ValueError(f"{label} image must be {PREVIEW_SIZE}, got {source.size}: {path}")
@@ -134,6 +184,26 @@ def load_preview_master(path: Path, label: str) -> Image.Image:
     rgb = source.convert("RGB")
     opaque = Image.new("L", PREVIEW_SIZE, 255)
     return Image.merge("RGBA", (*rgb.split(), opaque))
+
+
+def load_native_master(path: Path, label: str) -> Image.Image:
+    """Require an opaque, complete native canvas; never distort its aspect ratio."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    with Image.open(path) as image:
+        if image.format != "PNG":
+            raise ValueError(f"{label} image must be PNG")
+        source = image.convert("RGBA")
+    if source.size != NATIVE_SIZE:
+        raise ValueError(f"{label} native image must be {NATIVE_SIZE}, got {source.size}: {path}")
+    if source.getchannel("A").getextrema() != (255, 255):
+        raise ValueError(f"{label} native image must be fully opaque: {path}")
+    return source
+
+
+def fit_without_distortion(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    fitted = ImageOps.fit(image.convert("RGB"), size, Image.Resampling.LANCZOS)
+    return Image.merge("RGBA", (*fitted.split(), Image.new("L", size, 255)))
 
 
 def crop_with_edge_pad(
@@ -254,6 +324,7 @@ def derive_external_pngs(
     dark_dim_mask: Path,
     preview_blur: float,
     sharpen: bool,
+    source_mode: str,
 ) -> tuple[dict[str, bytes], dict[str, Any]]:
     masters = {"light": light_master, "dark": dark_master}
     dim_masks = {"light": light_dim_mask, "dark": dark_dim_mask}
@@ -262,17 +333,21 @@ def derive_external_pngs(
 
     for label, rule in THEME_RULES.items():
         master = masters[label]
-        save_png(master, work_dir / "preview_masters" / f"{label}_preview_master.png")
-
-        preview_source = master
+        save_png(master, work_dir / "source_masters" / f"{label}_{source_mode}_master.png")
+        if source_mode == "native":
+            preview_source = fit_without_distortion(master, PREVIEW_SIZE)
+            vcd = master.crop((kzb.KZB_VCD_JOIN_X, 0, *NATIVE_SIZE))
+            rid = fit_without_distortion(vcd, RID_SIZE)
+        else:
+            preview_source = master
+            vcd = resized_crop(master, rule.vcd_crop, VCD_SIZE, sharpen=sharpen)
+            rid = resized_crop(master, rule.rid_crop, RID_SIZE, sharpen=sharpen)
         if preview_blur > 0:
-            preview_source = master.filter(ImageFilter.GaussianBlur(radius=preview_blur))
+            preview_source = preview_source.filter(ImageFilter.GaussianBlur(radius=preview_blur))
         preview = apply_preview_alpha(
             preview_source,
             archive.read(f"{root}/{rule.preview_path}"),
         )
-        vcd = resized_crop(master, rule.vcd_crop, VCD_SIZE, sharpen=sharpen)
-        rid = resized_crop(master, rule.rid_crop, RID_SIZE, sharpen=sharpen)
         dim = make_dim_background(vcd, dim_masks[label], rule)
 
         outputs = {
@@ -287,8 +362,9 @@ def derive_external_pngs(
 
         report[label] = {
             "preview_alpha_md5": md5_image_channel(preview.getchannel("A")),
-            "vcd_crop": list(rule.vcd_crop),
-            "rid_crop": list(rule.rid_crop),
+            "vcd_crop": list(rule.vcd_crop) if source_mode == "legacy" else [5010, 0, 8960, 1320],
+            "rid_crop": list(rule.rid_crop) if source_mode == "legacy" else "aspect-preserving-center-crop-of-vcd",
+            "preview_derivation": "aspect-preserving-center-crop" if source_mode == "native" else "legacy-preview",
             "dim_mask": redacted_path(dim_masks[label]),
             "dim_blur_radius": rule.dim_blur_radius,
             "dim_overlay_rgb": list(rule.dim_overlay_rgb),
@@ -325,6 +401,7 @@ def build_kzb_payloads(
     source_kzb: bytes,
     source_records: list[kzb.TextureRecord],
     quality: str,
+    source_mode: str,
 ) -> tuple[dict[int, bytes], dict[str, Any]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     alphas = kzb.build_half_alphas(
@@ -334,14 +411,16 @@ def build_kzb_payloads(
         records=source_records,
     )
 
-    light_full = kzb.compose_full_texture_from_vcd_mapping(
-        light_master,
-        kzb.LIGHT_VCD_PREVIEW_CROP,
-    )
-    dark_full = kzb.compose_full_texture_from_vcd_mapping(
-        dark_master,
-        kzb.DARK_VCD_PREVIEW_CROP,
-    )
+    if source_mode == "native":
+        light_full = light_master.convert("RGB")
+        dark_full = dark_master.convert("RGB")
+    else:
+        light_full = kzb.compose_full_texture_from_vcd_mapping(
+            light_master, kzb.LIGHT_VCD_PREVIEW_CROP,
+        )
+        dark_full = kzb.compose_full_texture_from_vcd_mapping(
+            dark_master, kzb.DARK_VCD_PREVIEW_CROP,
+        )
     sources = {
         1: apply_original_alpha_premultiplied(
             dark_full.filter(ImageFilter.GaussianBlur(radius=18)),
@@ -386,6 +465,7 @@ def patch_kzb_from_masters(
     light_master: Image.Image,
     dark_master: Image.Image,
     quality: str,
+    source_mode: str,
 ) -> tuple[bytes, dict[str, Any]]:
     source_records = kzb.find_texture_records(source_kzb)
     payloads, source_reports = build_kzb_payloads(
@@ -396,6 +476,7 @@ def patch_kzb_from_masters(
         source_kzb=source_kzb,
         source_records=source_records,
         quality=quality,
+        source_mode=source_mode,
     )
     patched_kzb, _ = kzb.patch_kzb(source_kzb, payloads)
     patched_records = kzb.find_texture_records(patched_kzb)
@@ -425,11 +506,12 @@ def rgba_extrema_from_png_bytes(data: bytes) -> tuple[tuple[int, int], ...]:
 def verify_pngs(
     template_archive: zipfile.ZipFile,
     output_archive: zipfile.ZipFile,
-    root: str,
+    template_root: str,
+    output_root: str,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for relative_path, expected_size in PNG_TARGET_SIZES.items():
-        output_data = output_archive.read(f"{root}/{relative_path}")
+        output_data = output_archive.read(f"{output_root}/{relative_path}")
         with Image.open(io.BytesIO(output_data)) as image:
             rgba = image.convert("RGBA")
             alpha_extrema = rgba.getchannel("A").getextrema()
@@ -441,7 +523,7 @@ def verify_pngs(
             }
             if relative_path in PREVIEW_TARGETS:
                 original_alpha = Image.open(
-                    io.BytesIO(template_archive.read(f"{root}/{relative_path}"))
+                    io.BytesIO(template_archive.read(f"{template_root}/{relative_path}"))
                 ).convert("RGBA").getchannel("A")
                 entry["preview_alpha_md5"] = md5_image_channel(rgba.getchannel("A"))
                 entry["template_alpha_md5"] = md5_image_channel(original_alpha)
@@ -541,8 +623,8 @@ def verify_kzb_decode(
 def assert_report_is_safe(report: dict[str, Any], max_stitch_mae: float) -> None:
     if report["zip_test_bad_file"] is not None:
         raise ValueError(f"zip test failed at {report['zip_test_bad_file']}")
-    if not report["zip_names_identical_order"]:
-        raise ValueError("zip entry order changed")
+    if report["zip_file_count"] != 9:
+        raise ValueError("final OTA must contain exactly eight PNGs and one KZB")
 
     for relative_path, entry in report["pngs"].items():
         if not entry["size_matches"]:
@@ -554,12 +636,10 @@ def assert_report_is_safe(report: dict[str, Any], max_stitch_mae: float) -> None
             raise ValueError(f"{relative_path} is not fully opaque")
 
     kzb_report = report["kzb"]
-    if kzb_report["source_kzb_size"] != kzb_report["patched_kzb_size"]:
-        raise ValueError("patched KZB size changed")
     if not kzb_report["record0_preserved"]:
         raise ValueError("KZB rec0 changed")
-    if not all(kzb_report["record_offsets_same"]):
-        raise ValueError("KZB record offsets changed")
+    if not kzb_report["identity_rebuild_consistent"]:
+        raise ValueError("KZB identity rebuild did not verify")
 
     decode = report.get("decoded_kzb")
     if not decode:
@@ -590,94 +670,157 @@ def build_package(
     sharpen: bool = True,
     decode_verify: bool = True,
     max_stitch_mae: float = 4.0,
+    source_mode: str = "legacy",
+    theme_key: str = "wallpaper",
 ) -> dict[str, Any]:
-    progress("step 1/9 validate inputs")
+    progress("step 1/9 validate inputs and template")
+    if source_mode not in ("native", "legacy"):
+        raise ValueError(f"unsupported source mode: {source_mode}")
+    if not decode_verify:
+        raise ValueError("decoded ASTC/alpha/seam verification is required for final OTA output")
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", theme_key):
+        raise ValueError("theme key must be 1-32 lowercase ASCII letters, digits or underscores")
+    if not math.isfinite(preview_blur) or not 0 <= preview_blur <= 20:
+        raise ValueError("preview blur must be finite and between 0 and 20")
+    if not math.isfinite(max_stitch_mae) or not 0 <= max_stitch_mae <= 255:
+        raise ValueError("maximum stitch MAE must be finite and between 0 and 255")
     if not input_zip.exists():
         raise FileNotFoundError(input_zip)
     if not astcenc.exists():
         raise FileNotFoundError(astcenc)
-    if work_dir.exists():
-        shutil.rmtree(work_dir)
-    work_dir.mkdir(parents=True, exist_ok=True)
+    if input_zip.resolve() == output_zip.resolve():
+        raise ValueError("output ZIP must differ from template ZIP")
+    if output_zip.resolve() in {light_image.resolve(), dark_image.resolve()}:
+        raise ValueError("output ZIP must differ from source images")
+    source_kzb, _, kzb_name = identity.read_source(input_zip)
+    template_kzb, _, parsed_prefab = identity.validate_kzb(source_kzb)
+    if identity.resource_layout_profile(template_kzb) != "football-static":
+        raise ValueError("this two-image packager accepts only the audited static wallpaper template")
+    root = kzb_name.split("/ipd/wallpaper/", 1)[0]
+    root_properties = {item["property"]: item["value"] for item in parsed_prefab["root"]["properties"]["values"]}
+    if (root_properties.get("Node.Width"), root_properties.get("Node.Height")) != NATIVE_SIZE:
+        raise ValueError("template does not have the audited 8960x1320 native canvas")
+    if (kzb.KZB_TEXTURE_WIDTH, kzb.KZB_TEXTURE_HEIGHT, kzb.KZB_VCD_JOIN_X) != (8960, 1320, 5010):
+        raise ValueError("unsupported KZB texture geometry")
+    if len(kzb.find_texture_records(source_kzb)) != 7:
+        raise ValueError("template must have seven native ASTC records")
+    progress(f"template wallpaper root: {root}, project: {template_kzb.project_name}")
 
-    progress("step 2/9 load 2198x367 masters")
-    light_master = load_preview_master(light_image, "light")
-    dark_master = load_preview_master(dark_image, "dark")
+    work_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = Path(tempfile.mkdtemp(prefix="build-", dir=work_dir))
+
+    progress(f"step 2/9 load {source_mode} day/night masters")
+    loader = load_native_master if source_mode == "native" else load_preview_master
+    light_master = loader(light_image, "light")
+    dark_master = loader(dark_image, "dark")
     replacements: dict[str, bytes] = {}
 
     with zipfile.ZipFile(input_zip) as source_archive:
-        source_names = source_archive.namelist()
-        root = kzb.find_wallpaper_root(source_names)
-        progress(f"template wallpaper root: {root}")
         progress("step 3/9 derive external PNGs")
         external_replacements, external_report = derive_external_pngs(
             archive=source_archive,
             root=root,
             light_master=light_master,
             dark_master=dark_master,
-            work_dir=work_dir,
+            work_dir=run_dir,
             light_dim_mask=light_dim_mask,
             dark_dim_mask=dark_dim_mask,
             preview_blur=preview_blur,
             sharpen=sharpen,
+            source_mode=source_mode,
         )
         replacements.update(external_replacements)
 
-        kzb_name = f"{root}/{kzb.KZB_TEXTURE_PATH_SUFFIX}"
         progress("step 4/9 prepare KZB source records")
         patched_kzb, kzb_report = patch_kzb_from_masters(
-            source_kzb=source_archive.read(kzb_name),
+            source_kzb=source_kzb,
             astcenc=astcenc,
-            work_dir=work_dir,
+            work_dir=run_dir,
             light_master=light_master,
             dark_master=dark_master,
             quality=quality,
+            source_mode=source_mode,
         )
         replacements[kzb_name] = patched_kzb
 
-        progress("step 6/9 write output OTA zip")
-        output_zip.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(output_zip, "w") as output_archive:
+        progress("step 6/9 write nine-file candidate")
+        candidate_zip = run_dir / "candidate.zip"
+        with zipfile.ZipFile(candidate_zip, "w") as output_archive:
             for info in source_archive.infolist():
                 if info.is_dir():
-                    output_archive.writestr(info, b"")
                     continue
-                data = replacements.get(info.filename)
-                if data is None:
-                    data = source_archive.read(info.filename)
+                data = replacements[info.filename]
                 output_archive.writestr(kzb.copy_info(info), data)
 
-    with zipfile.ZipFile(input_zip) as template_archive, zipfile.ZipFile(output_zip) as output_archive:
+    progress("step 7/9 rebuild independent internal and outer identities")
+    candidate_kzb, candidate_pngs, _ = identity.read_source(candidate_zip)
+    internal_id, _, _ = identity.content_identity(theme_key, candidate_kzb, candidate_pngs)
+    final_stage = run_dir / "final-ota.zip"
+    identity_report = identity.build_package(
+        candidate_zip,
+        theme_key,
+        internal_id,
+        final_stage,
+        run_dir / "identity-report.json",
+    )
+    final_kzb_name = identity_report["kzb_path"]
+    final_root = final_kzb_name.split("/ipd/wallpaper/", 1)[0]
+    final_kzb = identity.read_source(final_stage)[0]
+    final_records = kzb.find_texture_records(final_kzb)
+    kzb_report["patched_kzb_size"] = len(final_kzb)
+    kzb_report["final_records"] = [record.__dict__ for record in final_records]
+    kzb_report["record_offsets_same"] = [
+        source["header_offset"] == final.header_offset
+        for source, final in zip(kzb_report["source_records"], final_records)
+    ]
+    kzb_report["identity_rebuild_consistent"] = (
+        identity_report["inverse_rebuild_byte_identical"]
+        and identity_report["no_old_identity_remaining"]
+    )
+
+    with zipfile.ZipFile(input_zip) as template_archive, zipfile.ZipFile(final_stage) as output_archive:
         output_names = output_archive.namelist()
-        root = kzb.find_wallpaper_root(output_names)
-        progress("step 7/9 verify ZIP, PNG, and KZB invariants")
+        progress("step 8/9 verify final ZIP, PNG, and KZB invariants")
         report: dict[str, Any] = {
             "input_zip": redacted_path(input_zip),
             "output_zip": redacted_path(output_zip),
             "light_image": redacted_path(light_image),
             "dark_image": redacted_path(dark_image),
-            "work_dir": redacted_path(work_dir),
+            "work_dir": redacted_path(run_dir),
             "astcenc": redacted_path(astcenc),
             "quality": quality,
+            "source_mode": source_mode,
+            "source_size": list(light_master.size),
+            "wallpaper_root": final_root,
+            "preview_paths": {
+                "light": f"{final_root}/light_preview_image.png",
+                "dark": f"{final_root}/dark_preview_image.png",
+            },
             "preview_size": list(PREVIEW_SIZE),
             "preview_blur": preview_blur,
             "sharpen": sharpen,
             "zip_names_identical_order": template_archive.namelist() == output_names,
+            "zip_structure_valid": True,
+            "zip_file_count": len([name for name in output_names if not name.endswith("/")]),
             "zip_test_bad_file": output_archive.testzip(),
             "external_pngs": external_report,
-            "pngs": verify_pngs(template_archive, output_archive, root),
+            "pngs": verify_pngs(template_archive, output_archive, root, final_root),
             "kzb": kzb_report,
+            "identity": redact_report_values(identity_report),
+            "vehicle_runtime_verified": False,
         }
         if decode_verify:
-            progress("step 8/9 decode verify KZB/VCD stitch")
+            progress("decode verify KZB/VCD stitch")
             report["decoded_kzb"] = verify_kzb_decode(
                 astcenc=astcenc,
-                output_kzb=output_archive.read(f"{root}/{kzb.KZB_TEXTURE_PATH_SUFFIX}"),
+                output_kzb=output_archive.read(final_kzb_name),
                 output_archive=output_archive,
-                root=root,
-                work_dir=work_dir,
+                root=final_root,
+                work_dir=run_dir,
             )
     assert_report_is_safe(report, max_stitch_mae=max_stitch_mae)
+    publish_verified_zip(final_stage, output_zip)
+    identity.read_source(output_zip)
     progress("safety checks passed")
     return report
 
@@ -685,9 +828,8 @@ def build_package(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a final Cadillac OTA wallpaper zip from two 2198x367 images. "
-            "The tool replaces external PNGs and KZB ASTC records, then applies "
-            "the v22 transparent-RGB rule for KZB auxiliary layers."
+            "Build a static day/night Cadillac OTA wallpaper from two matching "
+            "8960x1320 native images or two 2198x367 legacy preview images."
         )
     )
     parser.add_argument("--light-image", type=Path, required=True)
@@ -704,6 +846,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-sharpen", action="store_true")
     parser.add_argument("--skip-decode-verify", action="store_true")
     parser.add_argument("--max-stitch-mae", type=float, default=4.0)
+    parser.add_argument("--source-mode", choices=("native", "legacy"), default="legacy")
+    parser.add_argument("--theme-key", default="wallpaper")
     return parser.parse_args()
 
 
@@ -713,6 +857,14 @@ def main() -> None:
     work_dir = args.work_dir
     if work_dir is None:
         work_dir = PROJECT_ROOT / "build" / f"{args.output_zip.stem}_work"
+    report_path = args.report
+    if report_path is None:
+        report_path = work_dir / "package-report.json"
+    forbidden = (args.output_zip, args.input_zip, args.light_image, args.dark_image)
+    if any(report_path.resolve() == path.resolve() for path in forbidden):
+        raise ValueError("report path must differ from ZIP and source image paths")
+    if report_path.exists():
+        raise FileExistsError(f"report already exists; choose a new output path: {report_path}")
     report = build_package(
         input_zip=args.input_zip,
         output_zip=args.output_zip,
@@ -727,12 +879,18 @@ def main() -> None:
         sharpen=not args.no_sharpen,
         decode_verify=not args.skip_decode_verify,
         max_stitch_mae=args.max_stitch_mae,
+        source_mode=args.source_mode,
+        theme_key=args.theme_key,
     )
-    report_path = args.report
-    if report_path is None:
-        report_path = work_dir / "package-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=report_path.parent,
+                                     prefix=".package-report-", suffix=".tmp", delete=False) as temporary:
+        json.dump(report, temporary, ensure_ascii=False, indent=2)
+        temporary_path = Path(temporary.name)
+    try:
+        os.link(temporary_path, report_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
     progress("step 9/9 write report.json")
     print(
         json.dumps(

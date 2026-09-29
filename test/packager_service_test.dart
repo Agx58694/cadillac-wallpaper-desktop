@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cadillac_wallpaper_desktop/src/models/package_build_request.dart';
@@ -13,6 +14,33 @@ void main() {
 
     expect(script, isNotNull);
     expect(File(script!).existsSync(), isTrue);
+  });
+
+  test('passes native source mode and a safe theme key to the CLI', () {
+    final themeKey = safeThemeKey('Autumn Drive 2026!');
+    final arguments = PackageBuildRequest(
+      lightImagePath: 'light.png',
+      darkImagePath: 'dark.png',
+      outputZipPath: 'out.zip',
+      workDirPath: 'work',
+      reportPath: 'report.json',
+      sourceMode: WallpaperSourceMode.native,
+      themeKey: themeKey,
+    ).toCliArguments();
+
+    expect(
+        arguments,
+        containsAllInOrder(<String>[
+          '--source-mode',
+          'native',
+          '--theme-key',
+          themeKey,
+        ]));
+    expect(themeKey, matches(RegExp(r'^[a-z][a-z0-9_]{0,31}$')));
+    expect(safeThemeKey('春天'), isNot(safeThemeKey('夏天')));
+    expect(safeThemeKey('春天'), safeThemeKey(' 春天 '));
+    expect(safeThemeKey('../A\\B'), isNot(safeThemeKey('A B')));
+    expect(safeThemeKey('2026 Autumn'), startsWith('wallpaper_2026_'));
   });
 
   test('describes the Python script runtime', () {
@@ -326,6 +354,36 @@ echo "[cadillac-packager] step 2/2 fake done"
         '[cadillac-packager] step 2/2 fake done',
       ]),
     );
+  });
+
+  test('cancelled build does not report a successful package', () async {
+    final tempDir = await Directory.systemTemp.createTemp('packager_cancel_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final report = File(p.join(tempDir.path, 'package-report.json'));
+    await report.writeAsString('{"zip_test_bad_file":null}');
+    final completion = Completer<ProcessResult>();
+    final service = WallpaperPackagerService(
+      pythonExecutable: 'python3',
+      packagerScript: p.join(tempDir.path, 'packager.py'),
+      processRunner: (_, __, ___, {onOutput}) => completion.future,
+    );
+    final build = service.buildPackage(PackageBuildRequest(
+      lightImagePath: 'light.png',
+      darkImagePath: 'dark.png',
+      outputZipPath: p.join(tempDir.path, 'out.zip'),
+      workDirPath: p.join(tempDir.path, 'work'),
+      reportPath: report.path,
+    ));
+    await service.cancelActiveBuild();
+    completion.complete(ProcessResult(1, 0, '', ''));
+
+    await expectLater(
+        build,
+        throwsA(isA<PackagerException>().having(
+          (error) => error.message,
+          'message',
+          contains('已取消'),
+        )));
   });
 }
 

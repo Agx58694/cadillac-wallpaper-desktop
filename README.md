@@ -2,177 +2,82 @@
 
 [中文](README.zh-CN.md) | English
 
-Flutter desktop app for building Cadillac-compatible OTA wallpaper packages from two `2198x367` PNG masters.
+A Flutter desktop packager for two **static day/night** Cadillac OTA wallpaper images. The GUI calls the Python packager for KZB, ASTC, image derivation, package identity, and final ZIP validation. It does not implement those binary rules in Dart.
 
-The desktop UI does not reimplement KZB, ASTC, crop, alpha, or dim-mask rules. Both modes call the same Python CLI, `packager/cadillac_wallpaper_packager.py`, then read `package-report.json` and display the validation checks in the app.
+> Unofficial compatibility tool. It is not affiliated with, endorsed by, or sponsored by General Motors or Cadillac. See [DISCLAIMER.md](DISCLAIMER.md).
 
-> This is an unofficial project. It is not affiliated with, endorsed by, or sponsored by General Motors or Cadillac. See [DISCLAIMER.md](DISCLAIMER.md).
-
-Chinese usage guide: [docs/usage-zh-CN.md](docs/usage-zh-CN.md).
-
-## Keywords
-
-Cadillac wallpaper, Cadillac car wallpaper, Cadillac wallpaper packager, OTA wallpaper package, Flutter desktop, macOS, Windows, `.cwtheme`, Android-linked theme package, football template.
+For the complete desktop-to-vehicle workflow, see [中文使用说明](docs/usage-zh-CN.md).
 
 ## Download
 
-Download the desktop app from the [latest GitHub Release](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest).
+Download the v1.1.0 release assets below. GitHub's automatic source archives are not ready-to-run apps.
 
-| Platform | Download |
+| Platform | Asset |
 | --- | --- |
-| macOS Apple Silicon / Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-macos-universal.zip) |
-| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/latest/download/CadillacPackager-windows-x64.zip) |
+| macOS 12+ Apple Silicon / Intel | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-macos-universal.zip) |
+| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-windows-x64.zip) |
+| Android 12+ head unit | [wallpaper-studio-0.2.1-test.apk](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/wallpaper-studio-0.2.1-test.apk) |
 
-Use the release assets above. The `Source code` archives on the release page are for developers and are not ready-to-run app packages.
+These links become available when the v1.1.0 Release is published. See the [v1.1.0 release notes](docs/release-notes-v1.1.0.md) for the scope and validation boundary.
 
-## Features
+## Create a wallpaper
 
-- Standard OTA mode: select light and dark `2198x367` PNG masters, then output an OTA zip and a sibling report JSON.
-- Android-linked theme mode: select light/dark masters plus theme metadata, then output a `.cwtheme` package and save it in the local desktop theme library.
-- Report-driven validation UI for zip integrity, PNG size/alpha, preview alpha reuse, KZB size/record offsets, `rec0`, transparent RGB rules, and KZB/VCD stitch MAE.
-- macOS desktop support for Intel and Apple Silicon builds.
-- Windows x64 desktop support.
-- Drag-and-drop image import, progress logs, path redaction, and quick open-output-folder actions.
-- Bundled football template, so release downloads can build packages without configuring a separate template zip.
+1. Prepare one daytime and one nighttime PNG with the **same composition and dimensions**.
+2. Prefer two opaque **8960×1320** masters. The native split is IPD **5010×1320** on the left and VCD **3950×1320** on the right, joined at x=5010. Keep subjects clear of the vehicle's instrument, card, and toolbar overlays.
+3. In the desktop app, select **Standard OTA** for a ZIP or **Theme package** for a `.cwtheme`. Drag in the two PNGs and start packaging.
+4. Check that every final-package validation passes. The OTA ZIP and sibling report are saved outside the OTA archive.
+5. On an Android 12+ head unit with the compatible installer, import the OTA ZIP or `.cwtheme`, inspect day/night previews, then tap **应用壁纸**. Only a matching system callback confirms application; a timeout means the result is unconfirmed.
 
-> The current release only supports the football template. Other official template shapes differ and will be supported in later updates.
+The **legacy** input mode continues to accept two 2198×367 preview masters. It derives the native resources from that smaller image, so detail and composition are limited. The app selects the mode from the input dimensions; it rejects mismatched day/night sizes and other dimensions. For native mode, prepare art at the target aspect ratio instead of stretching unrelated images to fit.
 
-## Theme Package Format
+This version packages static day/night art. It does not create per-image animations, four-state wallpapers, dynamic right-screen video, weather/time effects, or vehicle FPS measurement.
 
-`.cwtheme` files contain:
+## Package format and compatibility
 
-```text
-cwtheme/
-  manifest.json
-  previews/light_preview_2198x367.png
-  previews/dark_preview_2198x367.png
-  previews/thumbnail_light.png
-  previews/thumbnail_dark.png
-  masters/light_master_2198x367.png
-  masters/dark_master_2198x367.png
-  payload/ota_wallpaper.zip
-  report/package-report.json
-```
-
-## Bundled Template And Optional Override
-
-The app bundles the football template by default:
+The finished OTA ZIP has exactly **nine files** beneath one generated 32-character hexadecimal ID and one `cadi_wallpaper...` folder:
 
 ```text
-BFA3A0F4596C4C57A6BCDC1EB3348932 / cadi_wallpaper05111930
+<32-hex-id>/cadi_wallpaper.../
+  light_preview_image.png             2198×367
+  dark_preview_image.png              2198×367
+  light_dim_background.png            3950×1320
+  dark_dim_background.png             3950×1320
+  vcd/wallpaper/light_wallpaper_vcd.png 3950×1320
+  vcd/wallpaper/dark_wallpaper_vcd.png  3950×1320
+  rid/screenSaver/light_screenSaver_rid.png 1920×1080
+  rid/screenSaver/dark_screenSaver_rid.png  1920×1080
+  ipd/wallpaper/<project>.kzb
 ```
 
-Release downloads can build packages directly without setting a template zip.
+The KZB keeps the audited static football scene structure, masks, and day/night state. Each content version receives independent internal resource identity and matching outer paths. The final validator checks the ZIP, all required images, preserved `rec0`, transparent RGB, KZB references, and IPD/VCD seam. Internal identity rebuilding can legitimately change KZB size and record offsets.
 
-To test with your own compatible template package, override the bundled template at runtime:
+`.cwtheme` uses the same OTA engine. It contains `cwtheme/payload/ota_wallpaper.zip`, a schema v1 manifest, previews, thumbnails, the original two masters, and a report. The master filenames reflect the input dimensions; the manifest's installation paths are derived from the actual OTA ZIP. Existing theme-library entries and older packages remain readable.
 
-```bash
-export CADILLAC_INPUT_ZIP=/path/to/your/template.zip
-```
+The app continues to bundle the repository's existing static football template. The static packaging path accepts only its audited `football-static` resource structure, including compatible external copies; unknown or dynamic templates are rejected. Other official themes are not claimed as supported. The Winter-Star and Alps experimental packages are **not bundled**.
 
-Optional overrides:
+## Build and test
 
 ```bash
-export CADILLAC_PYTHON=/path/to/python-with-pillow
-export CADILLAC_PACKAGER_SCRIPT=/path/to/cadillac_wallpaper_packager.py
-export CADILLAC_ASTCENC=/path/to/astcenc-or-astcenc.exe
-export CADILLAC_LIGHT_DIM_MASK=/path/to/light_dim_alpha_fixed_smoothed_used.png
-export CADILLAC_DARK_DIM_MASK=/path/to/dark_dim_alpha_fixed_smoothed_used.png
-```
-
-On Windows use `set NAME=value` in `cmd.exe` or `$env:NAME="value"` in PowerShell.
-
-The current packaging rules only support the football template. Overriding `CADILLAC_INPUT_ZIP` with another official theme is not guaranteed to work in this release.
-
-## Development
-
-```bash
-flutter pub get
-flutter analyze
-flutter test --coverage
-```
-
-Current coverage target is 80%+ line coverage.
-
-## macOS Build
-
-```bash
-flutter config --enable-macos-desktop
 flutter pub get
 flutter analyze
 flutter test
-flutter build macos --release
+PYTHONPATH=packager python3 -m unittest discover -s packager/tests -p 'test_*.py'
 ```
 
-Expected release app path:
+Install Pillow for Python source execution: `python3 -m pip install Pillow==11.3.0`. A macOS source-only `flutter build macos --release` does **not** bundle the packager runtime. The `desktop-release.yml` workflow builds architecture-specific Python/Pillow runtimes, puts both behind a Universal launcher inside the app, verifies the Flutter executable, launcher, and `astcenc` architecture slices, and uploads a macOS artifact. The Windows workflow bundles a PyInstaller runtime and `astcenc.exe` with the Flutter app. The release workflow runs manually and uploads Actions artifacts; creating a public GitHub Release is a separate publishing step.
 
-```text
-build/macos/Build/Products/Release/cadillac_wallpaper_desktop.app
-```
+For a Windows source build, use `scripts/build_windows_release.ps1` on Windows x64. `scripts/make_windows_build_kit.sh` creates the existing Windows build kit from macOS/Linux. Set `CADILLAC_PACKAGER_CLI` to override a bundled executable, or `CADILLAC_PYTHON` and `CADILLAC_PACKAGER_SCRIPT` for a source Python runtime. `CADILLAC_INPUT_ZIP` and `CADILLAC_ASTCENC` override the bundled template and encoder for compatible local testing.
 
-Architecture verification:
+## Installer status
 
-```bash
-lipo -info build/macos/Build/Products/Release/cadillac_wallpaper_desktop.app/Contents/MacOS/cadillac_wallpaper_desktop
-```
-
-The final macOS release must report both `x86_64` and `arm64`.
-
-## Windows x64 Build
-
-Run on a Windows x64 host with Flutter desktop enabled:
-
-```powershell
-flutter config --enable-windows-desktop
-flutter pub get
-flutter analyze
-flutter test --coverage
-flutter build windows --release
-```
-
-Expected Windows artifact directory:
-
-```text
-build\windows\x64\runner\Release\
-```
-
-Expected executable:
-
-```text
-build\windows\x64\runner\Release\cadillac_wallpaper_desktop.exe
-```
-
-Windows verification:
-
-```powershell
-Test-Path build\windows\x64\runner\Release\cadillac_wallpaper_desktop.exe
-Get-Item build\windows\x64\runner\Release\cadillac_wallpaper_desktop.exe
-```
-
-## Windows One-Click Build Kit
-
-From macOS or Linux, create a Windows build kit zip:
-
-```bash
-scripts/make_windows_build_kit.sh
-```
-
-Copy `dist/CadillacPackager-windows-build-kit.zip` to a Windows x64 machine, extract it, then right-click `build_windows_one_click.cmd` and choose "Run as administrator". The generated release package will be:
-
-```text
-dist\CadillacPackager-windows-x64.zip
-```
-
-The Windows build kit includes the currently supported football template. After copying it to a Windows machine, the packaged app can use the bundled template by default.
+The compatible Android installer is **壁纸空间** (`com.cadillac.wallpaperstudio`). Its existing `wallpaper-studio-0.2.1-test.apk` accepts OTA ZIP and `.cwtheme`, imports into its library, and can request system application. It is a debug-signed validation APK and includes a built-in sample wallpaper. Earlier app/package combinations received vehicle success feedback, including an A/B/A switch with independent identities; **0.2.1 and arbitrary packages have not been verified on every vehicle or OTA version**. The older `com.cadillac.themeinstaller` app only installs to a fixed football directory and is not the route for new generated identities.
 
 ## Community
 
-This project will continue as an open-source and free Cadillac wallpaper tooling series. The wallpaper packager is available now; the wallpaper installer is still an unverified work in progress.
-
-I am looking for Cadillac owners who want to help improve the tools, test different vehicles and system versions, share product suggestions, or help with tutorials, posts, and videos. Scan the WeChat QR code below to get in touch.
+This project remains open source and free. Cadillac owners can help test vehicle and OTA compatibility, share product feedback, or help with tutorials and videos. Scan the WeChat code to get in touch.
 
 <img src="docs/assets/wechat-contact.png" alt="WeChat contact" width="240">
 
-Good-faith learning, discussion, forks, and contributions are welcome. Copying this open-source work, rebranding it, and selling it for profit is not. This tooling series is intended to stay open-source and free, and contributors are expected to respect the work shared here.
+Good-faith learning, discussion, forks, and contributions are welcome. Copying the open-source work, rebranding it, and selling it for profit is not.
 
 禁止偷电

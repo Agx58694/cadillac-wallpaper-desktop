@@ -10,8 +10,7 @@ void main() {
       expect(summary.checkById('zip_integrity').passed, isTrue);
       expect(summary.checkById('png_dimensions_alpha').passed, isTrue);
       expect(summary.checkById('preview_alpha_template').passed, isTrue);
-      expect(summary.checkById('kzb_size').passed, isTrue);
-      expect(summary.checkById('kzb_record_offsets').passed, isTrue);
+      expect(summary.checkById('kzb_structure').passed, isTrue);
       expect(summary.checkById('kzb_rec0_preserved').passed, isTrue);
       expect(summary.checkById('aux_transparent_rgb').passed, isTrue);
       expect(summary.checkById('kzb_vcd_stitch_mae').passed, isTrue);
@@ -44,6 +43,32 @@ void main() {
         summary.checkById('kzb_vcd_stitch_mae').detail,
         contains('rec6'),
       );
+    });
+
+    test('accepts verified identity rebuild with changed size and offsets', () {
+      final report = _safeReport();
+      final kzb = report['kzb'] as Map<String, dynamic>;
+      kzb['source_kzb_size'] = 128;
+      kzb['patched_kzb_size'] = 256;
+      kzb['record_offsets_same'] = <bool>[false];
+      kzb['identity_rebuild_consistent'] = true;
+      report['zip_names_identical_order'] = false;
+      report['zip_structure_valid'] = true;
+
+      final summary = PackageReportSummary.fromJson(report);
+
+      expect(summary.checkById('zip_integrity').passed, isTrue);
+      expect(summary.checkById('kzb_structure').passed, isTrue);
+      expect(summary.toManifestChecks()['kzbOffsets'], isTrue);
+    });
+
+    test('rejects a failed identity rebuild even with fixed offsets', () {
+      final report = _safeReport();
+      (report['kzb'] as Map<String, dynamic>)['identity_rebuild_consistent'] =
+          false;
+
+      final summary = PackageReportSummary.fromJson(report);
+      expect(summary.checkById('kzb_structure').passed, isFalse);
     });
   });
 }
