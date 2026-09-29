@@ -84,7 +84,11 @@ class IdentityTests(unittest.TestCase):
                     for name in names[1:]:
                         archive.writestr(name, b'x')
                     archive.writestr(bad, b'x')
-                with self.assertRaisesRegex(ValueError, 'Unsafe ZIP path'):
+                # Windows zipfile normalizes a written backslash to '/'. The
+                # resulting entry is still rejected as outside the package.
+                expected = ('Unexpected or missing wallpaper file'
+                            if os.name == 'nt' and '\\' in bad else 'Unsafe ZIP path')
+                with self.assertRaisesRegex(ValueError, expected):
                     identity.read_source(path)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'extra-directory.zip'

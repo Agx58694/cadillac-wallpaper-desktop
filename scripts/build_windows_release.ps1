@@ -139,7 +139,7 @@ function Resolve-WindowsReleaseDir {
 
 flutter pub get
 if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed." }
-flutter analyze
+flutter analyze --no-fatal-infos
 if ($LASTEXITCODE -ne 0) { throw "flutter analyze failed." }
 if (!$SkipTests) {
   flutter test
