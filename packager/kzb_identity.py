@@ -382,6 +382,7 @@ def build_package(source, theme_key, version, output, report_path):
     require(re.fullmatch(r'[A-Za-z0-9_-]+', version), 'Invalid wallpaper version')
     source = source.resolve()
     require(source != output.resolve(), 'Do not overwrite source wallpaper')
+    require(output.resolve() != report_path.resolve(), 'Output ZIP and report paths must differ')
     require(source.stat().st_size <= MAX_BYTES, 'Source ZIP exceeds 512 MiB')
     source_hash = sha(source.read_bytes())
     original, pngs, original_kzb_name = read_source(source)

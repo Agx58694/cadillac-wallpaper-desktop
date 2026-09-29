@@ -138,11 +138,15 @@ function Resolve-WindowsReleaseDir {
 }
 
 flutter pub get
+if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed." }
 flutter analyze
+if ($LASTEXITCODE -ne 0) { throw "flutter analyze failed." }
 if (!$SkipTests) {
   flutter test
+  if ($LASTEXITCODE -ne 0) { throw "flutter test failed." }
 }
 flutter build windows --release
+if ($LASTEXITCODE -ne 0) { throw "flutter build windows --release failed." }
 
 $releaseDir = Resolve-WindowsReleaseDir
 $exePath = Join-Path $releaseDir "cadillac_wallpaper_desktop.exe"

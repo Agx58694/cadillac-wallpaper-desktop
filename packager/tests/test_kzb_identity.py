@@ -58,6 +58,9 @@ class IdentityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'out.zip'
             report_path = Path(directory) / 'report.json'
+            with self.assertRaisesRegex(ValueError, 'Output ZIP and report paths must differ'):
+                identity.build_package(TEMPLATE, 'static', 'v1', output, output)
+            self.assertFalse(output.exists())
             report = identity.build_package(TEMPLATE, 'static', 'v1', output, report_path)
             self.assertEqual(report['zip_entries'], 9)
             self.assertEqual(report['template_profile'], 'football-static')
