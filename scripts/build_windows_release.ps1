@@ -121,6 +121,9 @@ function Build-PackagerExecutable([string]$ReleaseDir) {
   if ($LASTEXITCODE -eq 0 -or !$probeOutput.Contains("runtime-probe-missing-template.zip")) {
     throw "Standalone packager runtime did not reach the expected missing-template boundary. Output: $probeOutput"
   }
+  # The failed input probe is expected; do not let its native exit code mark
+  # an otherwise successful PowerShell release script as failed.
+  $global:LASTEXITCODE = 0
 }
 
 function Resolve-WindowsReleaseDir {
