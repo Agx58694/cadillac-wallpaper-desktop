@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import zipfile
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageOps
 
 
 def sha256(path: Path) -> str:
@@ -33,10 +33,13 @@ def main() -> None:
     resources = extracted / "data/flutter_assets/packager"
     sizes = {"light": (4096, 2048), "dark": (10000, 1000)}
     for label, size in sizes.items():
-        gradient = Image.linear_gradient("L")
-        if label == "dark":
-            gradient = gradient.transpose(Image.Transpose.ROTATE_90)
-        ImageOps.colorize(gradient.resize(size), "#132d40", "#b3ced3").save(work / f"{label}.png")
+        # Preserve enough distinct colors after a very wide crop for the
+        # installer's independent nonblank-preview verification.
+        y = Image.linear_gradient("L").resize(size)
+        x = Image.linear_gradient("L").transpose(Image.Transpose.ROTATE_90).resize(size)
+        blend = ImageChops.add(x, y, scale=2)
+        channels = (x, y, blend) if label == "light" else (y, x, ImageOps.invert(blend))
+        Image.merge("RGB", channels).save(work / f"{label}.png")
 
     reports = {}
     for mode in ("crop", "native"):
