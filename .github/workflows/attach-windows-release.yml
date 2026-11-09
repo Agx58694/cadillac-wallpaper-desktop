@@ -1,0 +1,94 @@
+name: Attach verified Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful Desktop Release Artifacts run
+        required: true
+        type: string
+      source_sha:
+        description: Exact commit built by that run
+        required: true
+        type: string
+      release_tag:
+        description: Existing draft release tag
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Verify build provenance and draft destination
+        run: |
+          python3 - <<'PY'
+          import os, re
+          assert re.fullmatch(r'[0-9]+', os.environ['BUILD_RUN_ID'])
+          assert re.fullmatch(r'[0-9a-f]{40}', os.environ['SOURCE_SHA'])
+          assert re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', os.environ['RELEASE_TAG'])
+          PY
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN_ID" > run.json
+          gh release view "$RELEASE_TAG" --json isDraft,targetCommitish,assets > release.json
+          python3 - <<'PY'
+          import json, os
+          run = json.load(open('run.json'))
+          assert run['name'] == 'Desktop Release Artifacts'
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == os.environ['SOURCE_SHA']
+          release = json.load(open('release.json'))
+          assert release['isDraft'] and release['targetCommitish'] == os.environ['SOURCE_SHA']
+          assert not release['assets'], 'Refusing to replace existing release attachments'
+          PY
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: CadillacPackager-windows-x64
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: files
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows-packaging-evidence
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: evidence
+
+      - name: Fetch unchanged companion APK and verify attachments
+        run: |
+          gh release download v1.1.0 --pattern wallpaper-studio-0.2.1-test.apk --dir files
+          python3 - <<'PY'
+          import hashlib, json, zipfile
+          from pathlib import Path
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+          archive = Path('files/CadillacPackager-windows-x64.zip')
+          apk = Path('files/wallpaper-studio-0.2.1-test.apk')
+          evidence = json.loads(Path('evidence/release-smoke-report.json').read_text())
+          assert evidence['passed'] and evidence['release_archive_sha256'] == sha(archive)
+          assert sha(apk) == '421ca622556a6dad41413a3b449545063706ed7135738b30f3f791155499279d'
+          with zipfile.ZipFile(archive) as z:
+              assert z.testzip() is None
+              required = ['cadillac_wallpaper_desktop.exe',
+                  'packager_runtime/cadillac_wallpaper_packager.exe',
+                  'data/flutter_assets/packager/tools/windows/astcenc.exe']
+              assert all(name in z.namelist() for name in required)
+          Path('files/SHA256SUMS.txt').write_text(''.join(f'{sha(p)}  {p.name}\n' for p in [archive, apk]))
+          print(Path('files/SHA256SUMS.txt').read_text())
+          PY
+
+      - name: Attach to draft without publishing
+        run: |
+          gh release upload "$RELEASE_TAG" files/CadillacPackager-windows-x64.zip files/wallpaper-studio-0.2.1-test.apk files/SHA256SUMS.txt
