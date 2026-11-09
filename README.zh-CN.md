@@ -9,8 +9,8 @@
 | 设备 | 文件 |
 | --- | --- |
 | macOS 12+（Apple Silicon / Intel） | [桌面程序 ZIP](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-macos-universal.zip) |
-| Windows x64 | [桌面程序 ZIP](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-windows-x64.zip) |
-| Android 12+ 车机 | [壁纸空间 0.2.1 测试版 APK](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/wallpaper-studio-0.2.1-test.apk) |
+| Windows x64 | [桌面程序 v1.2.0 ZIP](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.2.0/CadillacPackager-windows-x64.zip) |
+| Android 12+ 车机 | [壁纸空间 0.2.1 测试版 APK](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.2.0/wallpaper-studio-0.2.1-test.apk) |
 
 解压桌面程序后运行；车机安装 APK。GitHub 自动生成的 `Source code` 是源码，不是安装包。
 
@@ -22,6 +22,6 @@
 
 详细步骤与常见问题见[中文使用说明](docs/usage-zh-CN.md)。
 
-上方下载链接仍是 v1.1.0，尚不包含本次裁剪功能；该功能目前在仓库源码中。
+Windows v1.2.0 下载包已包含裁剪功能。macOS 下载包仍为 v1.1.0，不含裁剪，仍需使用原先支持的两种输入尺寸。
 
 本版仅支持仓库内置的静态日夜模板。APK 是调试签名验证版，内置示例壁纸；0.2.1 和本版新生成的壁纸尚无本次实车应用结果。此工具与 General Motors、Cadillac 无从属或背书关系，详见[免责声明](DISCLAIMER.md)。

@@ -2,12 +2,23 @@ name: Desktop Release Artifacts
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
 
 permissions:
   contents: read
 
 jobs:
   macos-runtime:
+    if: inputs.platform != 'windows'
     name: macOS packager runtime (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -46,6 +57,7 @@ jobs:
           path: dist/cadillac_wallpaper_packager_${{ matrix.arch }}.tar.gz
 
   macos-release:
+    if: inputs.platform != 'windows'
     name: macOS Universal release
     needs: macos-runtime
     runs-on: macos-14
@@ -102,6 +114,7 @@ jobs:
           path: CadillacPackager-macos-universal.zip
 
   windows-release:
+    if: inputs.platform != 'macos'
     name: Windows x64 release
     runs-on: windows-2022
 
@@ -168,3 +181,19 @@ jobs:
         with:
           name: CadillacPackager-windows-x64
           path: dist/CadillacPackager-windows-x64.zip
+
+      - name: Test Python packager
+        env:
+          PYTHONPATH: packager
+        run: python -m unittest discover -s packager/tests -p 'test_*.py'
+
+      - name: Verify packaged native and crop builds
+        run: python scripts/verify_release_packaging.py --archive dist/CadillacPackager-windows-x64.zip --work build/release-smoke
+
+      - name: Upload Windows packaging evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-packaging-evidence
+          path: |
+            build/release-smoke/*.json
+            build/release-smoke/*.zip

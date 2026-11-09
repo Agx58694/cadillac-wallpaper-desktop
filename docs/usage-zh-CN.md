@@ -7,12 +7,12 @@
 | 设备 | 下载 |
 | --- | --- |
 | macOS 12+（Apple Silicon / Intel） | [CadillacPackager-macos-universal.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-macos-universal.zip) |
-| Windows x64 | [CadillacPackager-windows-x64.zip](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-windows-x64.zip) |
-| Android 12+ 车机 | [wallpaper-studio-0.2.1-test.apk](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/wallpaper-studio-0.2.1-test.apk) |
+| Windows x64 | [CadillacPackager-windows-x64.zip（v1.2.0）](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.2.0/CadillacPackager-windows-x64.zip) |
+| Android 12+ 车机 | [wallpaper-studio-0.2.1-test.apk](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.2.0/wallpaper-studio-0.2.1-test.apk) |
 
 解压桌面 ZIP 后运行程序，在车机上安装 APK。请选择上表中的附件；GitHub 自动提供的 `Source code` 是源码。APK 是调试签名的验证版，内置一张示例壁纸；首次打开不会自动应用示例。
 
-上表 v1.1.0 桌面下载包尚不包含下述任意尺寸裁剪功能；此功能目前在仓库源码中。
+Windows v1.2.0 包含下述任意尺寸裁剪功能。macOS 下载仍为 v1.1.0，不含裁剪，需使用两张 8960×1320 或两张 2198×367 PNG。
 
 ## 2. 准备两张图片
 

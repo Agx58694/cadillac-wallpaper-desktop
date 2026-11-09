@@ -9,8 +9,8 @@ Package two static day/night PNGs as a Cadillac compatible wallpaper. The deskto
 | Device | File |
 | --- | --- |
 | macOS 12+ (Apple Silicon / Intel) | [Desktop ZIP](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-macos-universal.zip) |
-| Windows x64 | [Desktop ZIP](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/CadillacPackager-windows-x64.zip) |
-| Android 12+ head unit | [壁纸空间 0.2.1 test APK](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.1.0/wallpaper-studio-0.2.1-test.apk) |
+| Windows x64 | [Desktop v1.2.0 ZIP](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.2.0/CadillacPackager-windows-x64.zip) |
+| Android 12+ head unit | [壁纸空间 0.2.1 test APK](https://github.com/Agx58694/cadillac-wallpaper-desktop/releases/download/v1.2.0/wallpaper-studio-0.2.1-test.apk) |
 
 Unzip and run the desktop app, then install the APK on the head unit. GitHub's automatic `Source code` archives are not installers.
 
@@ -22,6 +22,6 @@ Unzip and run the desktop app, then install the APK on the head unit. GitHub's a
 
 See the [Chinese usage guide](docs/usage-zh-CN.md) for detailed steps and troubleshooting.
 
-The v1.1.0 downloads above do not yet include this crop feature; it is currently in the repository source.
+The Windows v1.2.0 download includes cropping. The macOS download remains v1.1.0 and does not include cropping; its original input-size requirements still apply.
 
 This version supports only the bundled static day/night template. The APK is a debug-signed validation build with a sample wallpaper; version 0.2.1 and newly generated wallpapers have no real-vehicle application result from this release. This tool is not affiliated with or endorsed by General Motors or Cadillac; see the [disclaimer](DISCLAIMER.md).
