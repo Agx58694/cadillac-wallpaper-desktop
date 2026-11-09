@@ -108,6 +108,8 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
   String? _darkImagePath;
   ImageProbe? _lightProbe;
   ImageProbe? _darkProbe;
+  Offset _lightCrop = const Offset(0.5, 0.5);
+  Offset _darkCrop = const Offset(0.5, 0.5);
   PackageBuildResult? _lastResult;
   String? _lastPackagePath;
   String? _lastOutputFolderPath;
@@ -211,9 +213,11 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         if (isLight) {
           _lightImagePath = path;
           _lightProbe = probe;
+          _lightCrop = const Offset(0.5, 0.5);
         } else {
           _darkImagePath = path;
           _darkProbe = probe;
+          _darkCrop = const Offset(0.5, 0.5);
         }
       });
       final label = isLight ? '白天' : '黑夜';
@@ -222,18 +226,92 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         '已添加$label图片: ${p.basename(path)} '
         '($sizeLabel, alpha ${probe.alphaMin}-${probe.alphaMax})',
       );
-      if (!probe.isSupportedSize) {
-        _appendLog('$label图片尺寸不支持；请选择原生 8960x1320 或兼容 2198x367');
-      } else if (!probe.isValidForBuild) {
-        _appendLog('$label原生母图含透明像素；请提供完整不透明的 8960x1320 PNG');
+      if (!probe.isValidForBuild) {
+        _appendLog('$label图片含透明像素；裁剪到车机画布的图片须完整不透明');
       } else {
         _appendLog(probe.sourceMode == WallpaperSourceMode.native
             ? '$label使用原生画布 8960x1320'
-            : '$label使用旧版预览母图 2198x367，细节会被放大');
+            : probe.sourceMode == WallpaperSourceMode.legacy
+                ? '$label使用旧版预览母图 2198x367，细节会被放大'
+                : '$label将按比例裁剪为车机画布 8960x1320，可调整裁剪位置');
       }
     } on Object catch (error) {
       _appendLog('图片读取失败: $error');
     }
+  }
+
+  WallpaperSourceMode get _buildSourceMode {
+    if (_lightProbe?.sourceMode == WallpaperSourceMode.native &&
+        _darkProbe?.sourceMode == WallpaperSourceMode.native) {
+      return WallpaperSourceMode.native;
+    }
+    if (_lightProbe?.sourceMode == WallpaperSourceMode.legacy &&
+        _darkProbe?.sourceMode == WallpaperSourceMode.legacy) {
+      return WallpaperSourceMode.legacy;
+    }
+    return WallpaperSourceMode.crop;
+  }
+
+  Future<void> _editCrop({required bool isLight}) async {
+    if (_running) return;
+    final path = isLight ? _lightImagePath : _darkImagePath;
+    if (path == null) return;
+    final label = isLight ? '白天' : '黑夜';
+    var position = isLight ? _lightCrop : _darkCrop;
+    final selected = await showDialog<Offset>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('$label裁剪位置'),
+          content: SizedBox(
+            width: 720,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _PreviewStrip(
+                    path: path, compact: false, crop: true, position: position),
+                const SizedBox(height: 12),
+                const Text('按比例填满 8960×1320 车机画布；超出的部分会被裁掉。'),
+                Row(children: <Widget>[
+                  const SizedBox(width: 40, child: Text('左右')),
+                  Expanded(
+                      child: Slider(
+                    value: position.dx,
+                    onChanged: (value) => setDialogState(
+                        () => position = Offset(value, position.dy)),
+                  )),
+                ]),
+                Row(children: <Widget>[
+                  const SizedBox(width: 40, child: Text('上下')),
+                  Expanded(
+                      child: Slider(
+                    value: position.dy,
+                    onChanged: (value) => setDialogState(
+                        () => position = Offset(position.dx, value)),
+                  )),
+                ]),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, position),
+                child: const Text('使用此裁剪')),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      if (isLight) {
+        _lightCrop = selected;
+      } else {
+        _darkCrop = selected;
+      }
+    });
   }
 
   Future<void> _selectOutputZip() async {
@@ -279,10 +357,12 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         '步骤 1/6 校验输入: 白天 ${p.basename(_lightImagePath!)}，'
         '黑夜 ${p.basename(_darkImagePath!)}',
       );
-      final sourceMode = _lightProbe!.sourceMode!;
+      final sourceMode = _buildSourceMode;
       _appendLog(sourceMode == WallpaperSourceMode.native
           ? '输入模式: 原生 8960x1320'
-          : '输入模式: 旧版 2198x367 兼容');
+          : sourceMode == WallpaperSourceMode.legacy
+              ? '输入模式: 旧版 2198x367 兼容'
+              : '输入模式: 按比例裁剪到 8960x1320');
       final paths = _resolveBuildPaths(now);
       _appendLog('步骤 2/6 准备输出目录: ${p.dirname(paths.outputZipPath)}');
       final buildResources = await _resolveBuildResources();
@@ -330,6 +410,10 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
           lightDimMaskPath: lightDimMaskPath,
           darkDimMaskPath: darkDimMaskPath,
           sourceMode: sourceMode,
+          lightCropX: _lightCrop.dx,
+          lightCropY: _lightCrop.dy,
+          darkCropX: _darkCrop.dx,
+          darkCropY: _darkCrop.dy,
           themeKey: safeThemeKey(_mode == PackageMode.androidTheme
               ? _themeNameController.text.trim()
               : p.basenameWithoutExtension(paths.outputZipPath)),
@@ -402,8 +486,12 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
         author: _authorController.text.trim(),
         notes: _notesController.text.trim(),
         createdAt: createdAt,
-        lightMasterPath: _lightImagePath!,
-        darkMasterPath: _darkImagePath!,
+        lightMasterPath: _buildSourceMode == WallpaperSourceMode.crop
+            ? p.join(result.workDirPath, 'cropped_light_8960x1320.png')
+            : _lightImagePath!,
+        darkMasterPath: _buildSourceMode == WallpaperSourceMode.crop
+            ? p.join(result.workDirPath, 'cropped_dark_8960x1320.png')
+            : _darkImagePath!,
         otaZipPath: result.outputZipPath,
         reportPath: result.reportPath,
         reportSummary: result.reportSummary,
@@ -495,14 +583,12 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
     if (_lightImagePath == null || _darkImagePath == null) {
       return '需要选择白天和黑夜两张 PNG';
     }
-    if (_lightProbe?.sourceMode == null || _darkProbe?.sourceMode == null) {
-      return '两张输入图必须都是 8960x1320 或 2198x367';
+    if (_lightProbe == null || _darkProbe == null) {
+      return '请重新选择可读取的 PNG 图片';
     }
-    if (_lightProbe!.sourceMode != _darkProbe!.sourceMode) {
-      return '白天和黑夜必须使用相同尺寸与输入模式';
-    }
-    if (!_lightProbe!.isValidForBuild || !_darkProbe!.isValidForBuild) {
-      return '原生 8960x1320 日夜母图必须完整不透明';
+    if (_buildSourceMode != WallpaperSourceMode.legacy &&
+        (_lightProbe!.alphaMin != 255 || _darkProbe!.alphaMin != 255)) {
+      return '裁剪或原生模式的日夜图片必须完整不透明';
     }
     if (_mode == PackageMode.standardOta &&
         _outputZipController.text.trim().isEmpty) {
@@ -617,6 +703,9 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
                     darkImagePath: _darkImagePath,
                     lightProbe: _lightProbe,
                     darkProbe: _darkProbe,
+                    cropMode: _buildSourceMode == WallpaperSourceMode.crop,
+                    lightCrop: _lightCrop,
+                    darkCrop: _darkCrop,
                     outputZipController: _outputZipController,
                     themeNameController: _themeNameController,
                     authorController: _authorController,
@@ -628,6 +717,8 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
                     },
                     onPickLight: () => _selectImage(isLight: true),
                     onPickDark: () => _selectImage(isLight: false),
+                    onCropLight: () => _editCrop(isLight: true),
+                    onCropDark: () => _editCrop(isLight: false),
                     onDropLight: (paths) =>
                         _dropImage(isLight: true, paths: paths),
                     onDropDark: (paths) =>
@@ -642,6 +733,9 @@ class _PackagingHomePageState extends State<PackagingHomePage> {
                     mode: _mode,
                     lightImagePath: _lightImagePath,
                     darkImagePath: _darkImagePath,
+                    cropMode: _buildSourceMode == WallpaperSourceMode.crop,
+                    lightCrop: _lightCrop,
+                    darkCrop: _darkCrop,
                     result: _lastResult,
                     packagePath: _lastPackagePath,
                     outputFolderPath: _lastOutputFolderPath,
@@ -762,6 +856,9 @@ class _Sidebar extends StatelessWidget {
     required this.darkImagePath,
     required this.lightProbe,
     required this.darkProbe,
+    required this.cropMode,
+    required this.lightCrop,
+    required this.darkCrop,
     required this.outputZipController,
     required this.themeNameController,
     required this.authorController,
@@ -771,6 +868,8 @@ class _Sidebar extends StatelessWidget {
     required this.onModeChanged,
     required this.onPickLight,
     required this.onPickDark,
+    required this.onCropLight,
+    required this.onCropDark,
     required this.onDropLight,
     required this.onDropDark,
     required this.onPickOutput,
@@ -783,6 +882,9 @@ class _Sidebar extends StatelessWidget {
   final String? darkImagePath;
   final ImageProbe? lightProbe;
   final ImageProbe? darkProbe;
+  final bool cropMode;
+  final Offset lightCrop;
+  final Offset darkCrop;
   final TextEditingController outputZipController;
   final TextEditingController themeNameController;
   final TextEditingController authorController;
@@ -792,6 +894,8 @@ class _Sidebar extends StatelessWidget {
   final ValueChanged<PackageMode> onModeChanged;
   final VoidCallback onPickLight;
   final VoidCallback onPickDark;
+  final VoidCallback onCropLight;
+  final VoidCallback onCropDark;
   final Future<void> Function(List<String> paths) onDropLight;
   final Future<void> Function(List<String> paths) onDropDark;
   final VoidCallback onPickOutput;
@@ -817,14 +921,17 @@ class _Sidebar extends StatelessWidget {
             const _SectionLabel(
               icon: CupertinoIcons.photo,
               title: '输入图片',
-              trailing: '8960×1320 / 2198×367',
+              trailing: '推荐 8960×1320',
             ),
             const SizedBox(height: 10),
             _ImageInputTile(
               title: '白天',
               path: lightImagePath,
               probe: lightProbe,
+              crop: cropMode,
+              position: lightCrop,
               onPick: onPickLight,
+              onCrop: onCropLight,
               onDrop: onDropLight,
             ),
             const SizedBox(height: 10),
@@ -832,7 +939,10 @@ class _Sidebar extends StatelessWidget {
               title: '黑夜',
               path: darkImagePath,
               probe: darkProbe,
+              crop: cropMode,
+              position: darkCrop,
               onPick: onPickDark,
+              onCrop: onCropDark,
               onDrop: onDropDark,
             ),
             const SizedBox(height: 22),
@@ -986,14 +1096,20 @@ class _ImageInputTile extends StatefulWidget {
     required this.title,
     required this.path,
     required this.probe,
+    required this.crop,
+    required this.position,
     required this.onPick,
+    required this.onCrop,
     required this.onDrop,
   });
 
   final String title;
   final String? path;
   final ImageProbe? probe;
+  final bool crop;
+  final Offset position;
   final VoidCallback onPick;
+  final VoidCallback onCrop;
   final Future<void> Function(List<String> paths) onDrop;
 
   @override
@@ -1005,7 +1121,10 @@ class _ImageInputTileState extends State<_ImageInputTile> {
 
   @override
   Widget build(BuildContext context) {
-    final valid = widget.probe?.isValidForBuild == true;
+    final valid = widget.probe != null &&
+        (widget.crop
+            ? widget.probe!.alphaMin == 255
+            : widget.probe!.isValidForBuild);
     final imageProbe = widget.probe;
     final statusColor = valid ? _AppColors.success : _AppColors.warning;
     return DropTarget(
@@ -1040,6 +1159,14 @@ class _ImageInputTileState extends State<_ImageInputTile> {
                   label: '选择',
                   onPressed: widget.onPick,
                 ),
+                if (widget.path != null &&
+                    widget.crop &&
+                    widget.probe?.sourceMode != WallpaperSourceMode.native)
+                  _IconTextButton(
+                    icon: CupertinoIcons.crop,
+                    label: '裁剪',
+                    onPressed: widget.onCrop,
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -1054,7 +1181,11 @@ class _ImageInputTileState extends State<_ImageInputTile> {
                   ),
             ),
             const SizedBox(height: 9),
-            _PreviewStrip(path: widget.path, compact: true),
+            _PreviewStrip(
+                path: widget.path,
+                compact: true,
+                crop: widget.crop,
+                position: widget.position),
             const SizedBox(height: 8),
             Row(
               children: <Widget>[
@@ -1261,6 +1392,9 @@ class _Workbench extends StatelessWidget {
     required this.mode,
     required this.lightImagePath,
     required this.darkImagePath,
+    required this.cropMode,
+    required this.lightCrop,
+    required this.darkCrop,
     required this.result,
     required this.packagePath,
     required this.outputFolderPath,
@@ -1276,6 +1410,9 @@ class _Workbench extends StatelessWidget {
   final PackageMode mode;
   final String? lightImagePath;
   final String? darkImagePath;
+  final bool cropMode;
+  final Offset lightCrop;
+  final Offset darkCrop;
   final PackageBuildResult? result;
   final String? packagePath;
   final String? outputFolderPath;
@@ -1318,6 +1455,9 @@ class _Workbench extends StatelessWidget {
                               _PreviewPanel(
                                 lightImagePath: lightImagePath,
                                 darkImagePath: darkImagePath,
+                                cropMode: cropMode,
+                                lightCrop: lightCrop,
+                                darkCrop: darkCrop,
                               ),
                               const SizedBox(height: 14),
                               _ReportPanel(
@@ -1371,6 +1511,9 @@ class _Workbench extends StatelessWidget {
               _PreviewPanel(
                 lightImagePath: lightImagePath,
                 darkImagePath: darkImagePath,
+                cropMode: cropMode,
+                lightCrop: lightCrop,
+                darkCrop: darkCrop,
               ),
               const SizedBox(height: 14),
               _ReportPanel(
@@ -1552,10 +1695,16 @@ class _PreviewPanel extends StatelessWidget {
   const _PreviewPanel({
     required this.lightImagePath,
     required this.darkImagePath,
+    required this.cropMode,
+    required this.lightCrop,
+    required this.darkCrop,
   });
 
   final String? lightImagePath;
   final String? darkImagePath;
+  final bool cropMode;
+  final Offset lightCrop;
+  final Offset darkCrop;
 
   @override
   Widget build(BuildContext context) {
@@ -1574,8 +1723,16 @@ class _PreviewPanel extends StatelessWidget {
             builder: (context, constraints) {
               final sideBySide = constraints.maxWidth >= 560;
               final children = <Widget>[
-                _PreviewFrame(label: '白天', path: lightImagePath),
-                _PreviewFrame(label: '黑夜', path: darkImagePath),
+                _PreviewFrame(
+                    label: '白天',
+                    path: lightImagePath,
+                    crop: cropMode,
+                    position: lightCrop),
+                _PreviewFrame(
+                    label: '黑夜',
+                    path: darkImagePath,
+                    crop: cropMode,
+                    position: darkCrop),
               ];
               if (!sideBySide) {
                 return Column(
@@ -1602,10 +1759,16 @@ class _PreviewPanel extends StatelessWidget {
 }
 
 class _PreviewFrame extends StatelessWidget {
-  const _PreviewFrame({required this.label, required this.path});
+  const _PreviewFrame(
+      {required this.label,
+      required this.path,
+      required this.crop,
+      required this.position});
 
   final String label;
   final String? path;
+  final bool crop;
+  final Offset position;
 
   @override
   Widget build(BuildContext context) {
@@ -1637,24 +1800,31 @@ class _PreviewFrame extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _PreviewStrip(path: path, compact: false),
+        _PreviewStrip(
+            path: path, compact: false, crop: crop, position: position),
       ],
     );
   }
 }
 
 class _PreviewStrip extends StatelessWidget {
-  const _PreviewStrip({required this.path, required this.compact});
+  const _PreviewStrip(
+      {required this.path,
+      required this.compact,
+      this.crop = false,
+      this.position = const Offset(0.5, 0.5)});
 
   final String? path;
   final bool compact;
+  final bool crop;
+  final Offset position;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(compact ? 8 : 10),
       child: AspectRatio(
-        aspectRatio: 2198 / 367,
+        aspectRatio: crop ? 8960 / 1320 : 2198 / 367,
         child: DecoratedBox(
           decoration: const BoxDecoration(color: Color(0xff161a1d)),
           child: path == null
@@ -1665,7 +1835,11 @@ class _PreviewStrip extends StatelessWidget {
                     size: 22,
                   ),
                 )
-              : Image.file(File(path!), fit: BoxFit.contain),
+              : Image.file(File(path!),
+                  fit: crop ? BoxFit.cover : BoxFit.contain,
+                  alignment:
+                      Alignment(position.dx * 2 - 1, position.dy * 2 - 1),
+                  cacheWidth: 1800),
         ),
       ),
     );

@@ -201,8 +201,37 @@ def load_native_master(path: Path, label: str) -> Image.Image:
     return source
 
 
-def fit_without_distortion(image: Image.Image, size: tuple[int, int]) -> Image.Image:
-    fitted = ImageOps.fit(image.convert("RGB"), size, Image.Resampling.LANCZOS)
+def load_cropped_master(
+    path: Path, label: str, centering: tuple[float, float]
+) -> tuple[Image.Image, tuple[int, int]]:
+    """Fill the native canvas by an aspect-preserving crop of an opaque PNG."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if any(not math.isfinite(value) or not 0 <= value <= 1 for value in centering):
+        raise ValueError(f"{label} crop position must be between 0 and 1")
+    with Image.open(path) as image:
+        if image.format != "PNG":
+            raise ValueError(f"{label} image must be PNG")
+        source = image.convert("RGBA")
+    if source.getchannel("A").getextrema() != (255, 255):
+        raise ValueError(f"{label} crop image must be fully opaque: {path}")
+    original_size = source.size
+    if original_size == NATIVE_SIZE:
+        return source, original_size
+    return (
+        fit_without_distortion(source, NATIVE_SIZE, centering=centering),
+        original_size,
+    )
+
+
+def fit_without_distortion(
+    image: Image.Image,
+    size: tuple[int, int],
+    centering: tuple[float, float] = (0.5, 0.5),
+) -> Image.Image:
+    fitted = ImageOps.fit(
+        image.convert("RGB"), size, Image.Resampling.LANCZOS, centering=centering
+    )
     return Image.merge("RGBA", (*fitted.split(), Image.new("L", size, 255)))
 
 
@@ -672,9 +701,11 @@ def build_package(
     max_stitch_mae: float = 4.0,
     source_mode: str = "legacy",
     theme_key: str = "wallpaper",
+    light_crop: tuple[float, float] = (0.5, 0.5),
+    dark_crop: tuple[float, float] = (0.5, 0.5),
 ) -> dict[str, Any]:
     progress("step 1/9 validate inputs and template")
-    if source_mode not in ("native", "legacy"):
+    if source_mode not in ("native", "legacy", "crop"):
         raise ValueError(f"unsupported source mode: {source_mode}")
     if not decode_verify:
         raise ValueError("decoded ASTC/alpha/seam verification is required for final OTA output")
@@ -710,9 +741,21 @@ def build_package(
     run_dir = Path(tempfile.mkdtemp(prefix="build-", dir=work_dir))
 
     progress(f"step 2/9 load {source_mode} day/night masters")
-    loader = load_native_master if source_mode == "native" else load_preview_master
-    light_master = loader(light_image, "light")
-    dark_master = loader(dark_image, "dark")
+    if source_mode == "crop":
+        light_master, light_input_size = load_cropped_master(
+            light_image, "light", light_crop
+        )
+        dark_master, dark_input_size = load_cropped_master(
+            dark_image, "dark", dark_crop
+        )
+        save_png(light_master, work_dir / "cropped_light_8960x1320.png")
+        save_png(dark_master, work_dir / "cropped_dark_8960x1320.png")
+    else:
+        loader = load_native_master if source_mode == "native" else load_preview_master
+        light_master = loader(light_image, "light")
+        dark_master = loader(dark_image, "dark")
+        light_input_size, dark_input_size = light_master.size, dark_master.size
+    render_mode = "native" if source_mode == "crop" else source_mode
     replacements: dict[str, bytes] = {}
 
     with zipfile.ZipFile(input_zip) as source_archive:
@@ -727,7 +770,7 @@ def build_package(
             dark_dim_mask=dark_dim_mask,
             preview_blur=preview_blur,
             sharpen=sharpen,
-            source_mode=source_mode,
+            source_mode=render_mode,
         )
         replacements.update(external_replacements)
 
@@ -739,7 +782,7 @@ def build_package(
             light_master=light_master,
             dark_master=dark_master,
             quality=quality,
-            source_mode=source_mode,
+            source_mode=render_mode,
         )
         replacements[kzb_name] = patched_kzb
 
@@ -789,8 +832,13 @@ def build_package(
             "work_dir": redacted_path(run_dir),
             "astcenc": redacted_path(astcenc),
             "quality": quality,
-            "source_mode": source_mode,
+            "source_mode": render_mode,
             "source_size": list(light_master.size),
+            "input_mode": source_mode,
+            "input_sizes": {
+                "light": list(light_input_size),
+                "dark": list(dark_input_size),
+            },
             "wallpaper_root": final_root,
             "preview_paths": {
                 "light": f"{final_root}/light_preview_image.png",
@@ -809,6 +857,11 @@ def build_package(
             "identity": redact_report_values(identity_report),
             "vehicle_runtime_verified": False,
         }
+        if source_mode == "crop":
+            report["crop_positions"] = {
+                "light": list(light_crop),
+                "dark": list(dark_crop),
+            }
         if decode_verify:
             progress("decode verify KZB/VCD stitch")
             report["decoded_kzb"] = verify_kzb_decode(
@@ -828,8 +881,8 @@ def build_package(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a static day/night Cadillac OTA wallpaper from two matching "
-            "8960x1320 native images or two 2198x367 legacy preview images."
+            "Build a static day/night Cadillac OTA wallpaper from native images, "
+            "legacy previews, or arbitrary opaque PNGs cropped to 8960x1320."
         )
     )
     parser.add_argument("--light-image", type=Path, required=True)
@@ -846,7 +899,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-sharpen", action="store_true")
     parser.add_argument("--skip-decode-verify", action="store_true")
     parser.add_argument("--max-stitch-mae", type=float, default=4.0)
-    parser.add_argument("--source-mode", choices=("native", "legacy"), default="legacy")
+    parser.add_argument(
+        "--source-mode", choices=("native", "legacy", "crop"), default="legacy"
+    )
+    for label in ("light", "dark"):
+        for axis in ("x", "y"):
+            parser.add_argument(f"--{label}-crop-{axis}", type=float, default=0.5)
     parser.add_argument("--theme-key", default="wallpaper")
     return parser.parse_args()
 
@@ -881,6 +939,8 @@ def main() -> None:
         max_stitch_mae=args.max_stitch_mae,
         source_mode=args.source_mode,
         theme_key=args.theme_key,
+        light_crop=(args.light_crop_x, args.light_crop_y),
+        dark_crop=(args.dark_crop_x, args.dark_crop_y),
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=report_path.parent,

@@ -41,8 +41,8 @@ class ThemePackageService {
       throw const FormatException('日夜母图尺寸必须相同');
     }
     final sourceMode = WallpaperSourceMode.fromSize(lightSize[0], lightSize[1]);
-    if (sourceMode == null) {
-      throw const FormatException('母图尺寸只支持 8960×1320 或 2198×367');
+    if (sourceMode == WallpaperSourceMode.crop) {
+      throw const FormatException('主题包母图必须是打包器生成的 8960×1320 裁剪图');
     }
     final reportSize = report['source_size'];
     if (reportSize != null &&

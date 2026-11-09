@@ -28,19 +28,42 @@ void main() {
       themeKey: themeKey,
     ).toCliArguments();
 
-    expect(
-        arguments,
-        containsAllInOrder(<String>[
-          '--source-mode',
-          'native',
-          '--theme-key',
-          themeKey,
-        ]));
+    expect(arguments, containsAllInOrder(<String>['--source-mode', 'native']));
+    expect(arguments, containsAllInOrder(<String>['--theme-key', themeKey]));
     expect(themeKey, matches(RegExp(r'^[a-z][a-z0-9_]{0,31}$')));
     expect(safeThemeKey('春天'), isNot(safeThemeKey('夏天')));
     expect(safeThemeKey('春天'), safeThemeKey(' 春天 '));
     expect(safeThemeKey('../A\\B'), isNot(safeThemeKey('A B')));
     expect(safeThemeKey('2026 Autumn'), startsWith('wallpaper_2026_'));
+  });
+
+  test('passes independent crop positions for arbitrary input sizes', () {
+    final arguments = const PackageBuildRequest(
+      lightImagePath: 'light.png',
+      darkImagePath: 'dark.png',
+      outputZipPath: 'out.zip',
+      workDirPath: 'work',
+      reportPath: 'report.json',
+      sourceMode: WallpaperSourceMode.crop,
+      lightCropX: 0.25,
+      lightCropY: 0.75,
+      darkCropX: 0.8,
+      darkCropY: 0.2,
+    ).toCliArguments();
+    expect(
+        arguments,
+        containsAllInOrder(<String>[
+          '--source-mode',
+          'crop',
+          '--light-crop-x',
+          '0.25',
+          '--light-crop-y',
+          '0.75',
+          '--dark-crop-x',
+          '0.8',
+          '--dark-crop-y',
+          '0.2',
+        ]));
   });
 
   test('describes the Python script runtime', () {

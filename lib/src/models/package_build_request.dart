@@ -4,12 +4,13 @@ import 'package:crypto/crypto.dart';
 
 enum WallpaperSourceMode {
   native,
-  legacy;
+  legacy,
+  crop;
 
-  static WallpaperSourceMode? fromSize(int width, int height) {
+  static WallpaperSourceMode fromSize(int width, int height) {
     if (width == 8960 && height == 1320) return native;
     if (width == 2198 && height == 367) return legacy;
-    return null;
+    return crop;
   }
 }
 
@@ -47,6 +48,10 @@ class PackageBuildRequest {
     this.decodeVerify = true,
     this.maxStitchMae = 4.0,
     this.sourceMode = WallpaperSourceMode.legacy,
+    this.lightCropX = 0.5,
+    this.lightCropY = 0.5,
+    this.darkCropX = 0.5,
+    this.darkCropY = 0.5,
     this.themeKey = 'wallpaper',
   });
 
@@ -65,6 +70,10 @@ class PackageBuildRequest {
   final bool decodeVerify;
   final double maxStitchMae;
   final WallpaperSourceMode sourceMode;
+  final double lightCropX;
+  final double lightCropY;
+  final double darkCropX;
+  final double darkCropY;
   final String themeKey;
 
   List<String> toCliArguments() {
@@ -75,6 +84,14 @@ class PackageBuildRequest {
       darkImagePath,
       '--source-mode',
       sourceMode.name,
+      '--light-crop-x',
+      lightCropX.toString(),
+      '--light-crop-y',
+      lightCropY.toString(),
+      '--dark-crop-x',
+      darkCropX.toString(),
+      '--dark-crop-y',
+      darkCropY.toString(),
       '--theme-key',
       themeKey,
       '--output-zip',

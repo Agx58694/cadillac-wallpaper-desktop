@@ -36,6 +36,24 @@ class NativeImageTests(unittest.TestCase):
         self.assertEqual(result.getpixel((0, 50))[:3], (255, 0, 0))
         self.assertEqual(result.getpixel((99, 50))[:3], (255, 0, 0))
 
+    def test_crop_position_selects_each_side_and_outputs_native_canvas(self):
+        source = Image.new("RGB", (1000, 100), (0, 0, 0))
+        source.paste((255, 0, 0), (0, 0, 500, 100))
+        source.paste((0, 0, 255), (500, 0, 1000, 100))
+        left = packager.fit_without_distortion(source, (100, 100), (0, 0.5))
+        right = packager.fit_without_distortion(source, (100, 100), (1, 0.5))
+        self.assertEqual(left.getpixel((50, 50))[:3], (255, 0, 0))
+        self.assertEqual(right.getpixel((50, 50))[:3], (0, 0, 255))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.png"
+            source.save(path)
+            native, original_size = packager.load_cropped_master(path, "light", (1, 0.5))
+            self.assertEqual(original_size, (1000, 100))
+            self.assertEqual(native.size, packager.NATIVE_SIZE)
+            self.assertEqual(native.getpixel((native.width // 2, native.height // 2))[:3], (0, 0, 255))
+            with self.assertRaisesRegex(ValueError, "crop position"):
+                packager.load_cropped_master(path, "light", (float("nan"), 0.5))
+
     def test_publish_refuses_to_replace_a_different_existing_package(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

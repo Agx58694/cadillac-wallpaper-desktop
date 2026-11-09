@@ -21,13 +21,12 @@ class ImageProbe {
   final int alphaMin;
   final int alphaMax;
 
-  WallpaperSourceMode? get sourceMode =>
+  WallpaperSourceMode get sourceMode =>
       WallpaperSourceMode.fromSize(width, height);
 
-  bool get isSupportedSize => sourceMode != null;
-
   bool get isValidForBuild =>
-      sourceMode != null &&
+      width > 0 &&
+      height > 0 &&
       (sourceMode == WallpaperSourceMode.legacy ||
           (alphaMin == 255 && alphaMax == 255));
 

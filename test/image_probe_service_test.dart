@@ -28,13 +28,12 @@ void main() {
     expect(probe.sourceMode, WallpaperSourceMode.legacy);
   });
 
-  test('recognizes native and legacy sizes without accepting mixed geometry',
-      () {
+  test('recognizes native, legacy, and arbitrary sizes', () {
     expect(
         WallpaperSourceMode.fromSize(8960, 1320), WallpaperSourceMode.native);
     expect(WallpaperSourceMode.fromSize(2198, 367), WallpaperSourceMode.legacy);
-    expect(WallpaperSourceMode.fromSize(8920, 1320), isNull);
-    expect(WallpaperSourceMode.fromSize(8960, 367), isNull);
+    expect(WallpaperSourceMode.fromSize(8920, 1320), WallpaperSourceMode.crop);
+    expect(WallpaperSourceMode.fromSize(8960, 367), WallpaperSourceMode.crop);
     const transparentNative = ImageProbe(
       path: 'native.png',
       width: 8960,
@@ -43,8 +42,17 @@ void main() {
       alphaMin: 0,
       alphaMax: 255,
     );
-    expect(transparentNative.isSupportedSize, isTrue);
     expect(transparentNative.isValidForBuild, isFalse);
+    const opaqueArbitrary = ImageProbe(
+      path: 'arbitrary.png',
+      width: 3000,
+      height: 2000,
+      hasAlpha: false,
+      alphaMin: 255,
+      alphaMax: 255,
+    );
+    expect(opaqueArbitrary.sourceMode, WallpaperSourceMode.crop);
+    expect(opaqueArbitrary.isValidForBuild, isTrue);
   });
 
   test('rejects a JPEG renamed with a PNG extension', () async {
